@@ -1,5 +1,4 @@
-use crate::{types::{Scope, SequenceNode, NodeType, Node, CallFuncNode}, lexer::{to_tokens, Token, TokenType}};
-use crate::types::GetVariableNode;
+use crate::{types::{SequenceNode, Node}, lexer::{to_tokens, Token}};
 
 #[derive(Debug)]
 pub struct ParserError {
@@ -8,112 +7,153 @@ pub struct ParserError {
     pub description: String
 }
 
-pub fn parse_arguments(scope: &mut Scope, tokens: &mut Vec<Token>) -> Result<Vec<Node>, ParserError> {
-    let mut token_result = peek(tokens);
+pub fn parse_tokens(tokens: &mut Vec<Token>) -> Result<SequenceNode, ParserError> {
+    /*
+    # Syntax:
+    START [Identifier=Id,Lparen=Lp,Rparen=Rp,Lbrace=Lb,Rbrace=Rb,Id Lp=Fc,IntConstant=Ic,StringConstant=Sc,Comma=Cm] END = SequenceNode(vec![Split(Cm, $)])
+    Fc [Id=ID,Ic=IC,Sc=SC,Cm=CM,Fc..Rp=OF,Lb..Rb=FB]* Rp = CallFuncNode(Fc.Id.value, vec![Split(CM, Fc.Lp..Rp)])
+        ID = GetVariableNode(ID.name)
+        IC = IntConstant(IC.value)
+        SC = StrConstant(SC.value)
+        OF = CallFuncNode(OF.Fc.Id.name, vec![Split(CM, OF.Fc..OF.Rp)])
+        FB = LambdaNode(FB.Lb..FB.Rb)
+    ELSE = ParserError(...)
+    # End of syntax
 
-    if token_result.is_none() {
-        return Err(ParserError { line: 0, column: 0, description: "Expected arguments at the end of file".to_string() });
+    # Code:
+    declvar("i", "a", 5),
+    declvar("i", "b", parse_int(input()))
+    print(add(a, b))
+    # End of code
+
+    # Pseudo-code implementation:
+    fn parse_sequence() {
+        seq=vec![]
+        seq.push(parse_function())
+        while (expect_comma().is_some()) {
+            seq.push(parse_function())
+        }
+        return seq;
     }
+    
+    fn expect_*(tokens, *=a) {
+        if peek(tokens).type != a {
+            return None;
+        }
 
-    tokens.pop();
-    let mut args_started = false;
-    let mut nodes: Vec<Node> = Vec::new();
+        return Some(tokens.pop())
+    }
+    
+    get_identifier = expect_identifier;
+    
+    fn get_arguments() {
+        args=vec![]
+        args.push(parse_expression_or_rparen())
+        while (expect_comma().is_some()) {
+            args.push(parse_expression_or_rparen());
+        }
+        return args;
+    }
+    
+    fn parse_expression_or_rparen(tokens) {
+        let token = peek(tokens);
 
-    while token_result.is_some() {
-        let token = token_result.unwrap();
-
-        if token.token_type == TokenType::Lparen {
-            if args_started {
-                return Err(ParserError { line: token.line, column: token.column, description: "Unexpected left parentheses ('(')".to_string() });
-            }
-
-            args_started = true;
-        } else if token.token_type == TokenType::Rparen {
-            if !args_started {
-                return Err(ParserError { line: token.line, column: token.column, description: "Unexpected right parentheses (')'). May be insert left parentheses (')') before?".to_string() });
-            }
-
-            return Ok(nodes);
+        if token.type == Ident&&peek_next(tokens).type==Lparen {
+            return parse_function(tokens);
+        } else if token.type==Ident {
+            return parse_identifier(tokens);
+        } else if token.type==Str {
+            return parse_str(tokens);
+        } else if token.type == Int {
+            return parse_int(tokens);
         } else {
-            let result: Result<*mut Node, ParserError> = match token.token_type {
-                TokenType::Identifier => {
-                    let func_call = parse_function_call(scope, tokens);
-
-                    if func_call.is_ok() {
-                        Ok(&func_call.unwrap() as *const CallFuncNode as *mut Node)
-                    } else {
-                        let node = GetVariableNode { node: Node { node_type: NodeType::Identifier }, name:  };
-                    }
-                }
-            };
-            nodes.push(parse_expression())
-        }
-
-        token_result = tokens.pop();
-    }
-
-    Err(ParserError { line: 0, column: 0, description: "Expected end of argument list, got end of file".to_string() })
-}
-
-fn peek(tokens: &mut Vec<Token>) -> Option<&Token> {
-    tokens.get(tokens.len() - 1)
-}
-
-pub fn parse_function_call(scope: &mut Scope, tokens: &mut Vec<Token>) -> Result<CallFuncNode, ParserError> {
-    let ident_result = peek(tokens);
-
-    if ident_result.is_none() {
-        return Err(ParserError { line: 0, column: 0, description: "Expected function call at the end of file".to_string() });
-    }
-
-    let ident = ident_result.unwrap();
-
-    if ident.token_type != TokenType::Identifier {
-        return Err(ParserError { line: ident.line, column: ident.column, description: "Expected identifier".to_string() });
-    }
-
-    tokens.pop();
-
-    let arguments_result = parse_arguments(scope, tokens);
-
-    if arguments_result.is_err() {
-        return Err(arguments_result.unwrap_err());
-    }
-
-    let arguments = arguments_result.unwrap();
-    let func_call = CallFuncNode {node: Node { node_type: NodeType::CallFunc as u8 }, name: ident.content.clone(), args: arguments};
-    return Ok(func_call);
-}
-
-pub fn parse_tokens(scope: &mut Scope, tokens: &mut Vec<Token>) -> Result<SequenceNode, ParserError> {
-    let nodes: Vec<*mut Node> = Vec::new();
-
-    while tokens.len() > 0 {
-        let func_call_result = parse_function_call(scope, tokens);
-        
-        if func_call_result.is_err() {
-            return Err(func_call_result.unwrap_err());
-        }
-
-        let token_result = tokens.pop();
-
-        if token_result.is_none() {
-            break;
-        }
-
-        let token = token_result.unwrap();
-
-        if token.token_type != TokenType::Comma {
-            return Err(ParserError { line: token.line, column: token.column, description: "Expected comma".to_string() });
+            return ParserError(...);
         }
     }
 
-    let ast = SequenceNode { node: crate::types::Node { node_type: NodeType::Sequence as u8 }, body: nodes };
+    fn parse_function {
+        return CallFuncNode(get_identifier(), get_arguments());
+    }
 
-    Ok(ast)
+    parse_* = todo!();
+    # End of pseudo-code implementation
+
+    # Result
+    parse_sequence(##TOPLEVEL##) {
+        parse_function {
+            get_identifier() = "declvar";
+            get_arguments() {
+                expect_lparen();
+                parse_expression_or_rparen() = Str("i");
+                expect_comma();
+                parse_expression_or_rparen() = Str("a");
+                expect_comma();
+                parse_expression_or_rparen() = Int(5);
+                expect_comma() = None => args = vec![Str("i"), Str("a"), Int(5)];
+                expect_rparen();
+                return args;
+            } = vec![Str("i"), Str("a"), Int(5)];
+            return all;
+        } = CallFuncNode("declvar", vec![Str("i"), Str("a"), Int(5)]);
+        expect_comma();
+        parse_function {
+            get_identifier() = "declvar";
+            get_arguments() {
+                expect_lparen();
+                parse_expression_or_rparen() = Str("i");
+                expect_comma();
+                parse_expression_or_rparen() = Str("b");
+                expect_comma();
+                parse_expression_or_rparen() = parse_function {
+                    get_identifier() = "parse_int";
+                    get_arguments() {
+                        expect_lparen();
+                        parse_expression_or_rparen() = parse_function {
+                            get_identifier() = "input";
+                            get_arguments() {
+                                expect_lparen();
+                                parse_expression_or_rparen() = None;
+                                expect_rparen();
+                                return vec![];
+                            } = vec![];
+                        } = CallFuncNode("input", vec![]);
+                    } = vec![CallFuncNode("input", vec![])];
+                } = CallFuncNode("parse_int", vec![CallFuncNode("input", vec![])]);
+                expect_comma() = None => args = vec![Str("i"), Str("b"), CallFuncNode("parse_int", vec![CallFuncNode("input", vec![])])];
+                expect_rparen();
+                return args;
+            } = vec![Str("i"), Str("b"), CallFuncNode("parse_int", vec![CallFuncNode("input", vec![])])];
+            return all;
+        } = CallFuncNode("declvar", vec![Str("i"), Str("b"), CallFuncNode("parse_int", vec![CallFuncNode("input", vec![])])]);
+        expect_comma();
+        parse_function {
+            get_identifier() = "print";
+            get_arguments() {
+                expect_lparen();
+                parse_expression_or_rparen() = parse_function {
+                    get_identifier() = "add";
+                    get_arguments() {
+                        expect_lparen();
+                        parse_expression_or_rparen() = VarNode("a");
+                        expect_comma();
+                        parse_expression_or_rparen() = VarNode("b");
+                        expect_comma() = None => args = vec![VarNode("a"), VarNode("b")];
+                        return args;
+                    } = vec![CallFuncNode("add", vec![VarNode("a"), VarNode("b")])];
+                } = CallFuncNode("print", vec![CallFuncNode("add", vec![VarNode("a"), VarNode("b")])]);
+                expect_comma() = None => expect_rparen(); args = vec![CallFuncNode("add", vec![VarNode("a"), VarNode("b")])];
+                return args;
+            } = vec![CallFuncNode("add", vec![VarNode("a"), VarNode("b")])];
+            return all;
+        } = CallFuncNode("print", vec![CallFuncNode("add", vec![VarNode("a"), VarNode("b")])]);
+        expect_comma() = None;
+    } = SequenceNode(CallFuncNode("declvar", vec![Str("i"), Str("a"), Int(5)]), CallFuncNode("declvar", vec![Str("i"), Str("b"), CallFuncNode("parse_int", vec![CallFuncNode("input", vec![])])]), CallFuncNode("print", vec![CallFuncNode("add", vec![VarNode("a"), VarNode("b")])]));
+    # End of result
+     */
+    Ok(SequenceNode { node: Node { node_type: 0 }, body: vec![] })
 }
 
-pub fn parse(scope: &mut Scope, code: &str) -> Result<SequenceNode, ParserError> {
+pub fn parse(code: &str) -> Result<SequenceNode, ParserError> {
     let tokens_result = to_tokens(code);
 
     if tokens_result.is_err() {
@@ -122,5 +162,5 @@ pub fn parse(scope: &mut Scope, code: &str) -> Result<SequenceNode, ParserError>
     }
 
     let mut tokens = tokens_result.unwrap();
-    parse_tokens(scope, &mut tokens)
+    parse_tokens(&mut tokens)
 }
