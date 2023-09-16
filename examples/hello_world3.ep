@@ -1,0 +1,20 @@
+print("Hello#, ##World##!") #Comment
+# Single-line comment
+## Multi-
+line 
+comment ##
+## ##
+##
+hi
+##
+## 123
+##
+##
+hello ##
+## multi-line but in single line ##
+### Still single-line comment
+#### Another single-line comment
+#" Still valid comment
+,
+##Com
+Block##

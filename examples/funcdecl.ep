@@ -1,0 +1,13 @@
+declfunc("v", "print`Hello_World!", "v", {
+    print("Hello, World")
+}),
+
+declfunc("i", "print`loop", "i", "total`times", {
+    forrng(total`times, {
+        print`Hello_World!()
+    }),
+    return(total`times)
+}),
+
+declvar("i", result, print`loop(4)),
+print(result)

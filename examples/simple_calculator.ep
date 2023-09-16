@@ -1,0 +1,31 @@
+declvar("i", "first_op"),
+declvar("s", "operation"),
+declvar("i", "second_op"),
+
+set(first_op, parse_int(input())),
+
+##
+SqN(
+    FcN(
+        "declvar", StC("i"), StC("first_op")
+    ), FcN(
+        "declvar", StC("s"), StC("operation")
+    ), FcN(
+        "declvar", StC("i"), StC("second_op")
+    ), FcN(
+        "set", VrN("first_op"), FcN(
+            "parse_int", FcN(
+                "input"
+            )
+        )
+    )
+)
+
+call_func(prog) -> execute_sequence(prog.seq) ->
+execute_func("declvar", Args("i", "first_op")) -> functions["declvar"]("i", "first_op")
+execute_func("declvar", Args("s", "operation")) -> functions["declvar"]("s", "operation")
+execute_func("declvar", Args("i", "second_op")) -> functions["declvar"]("i", "second_op")
+execute_func("set", Args(variables["first_op"],
+    execute_func("parse_int", Args(execute_func("input"))) ->
+functions["set"](variables["first_op"], functions["parse_int"](functions["input"]()))
+##
