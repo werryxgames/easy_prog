@@ -80,7 +80,6 @@ fn test_print_error() {
 
 #[test]
 fn test_comments() {
-    // tokens = to_tokens("print() # Does nothing").unwrap();
     test_tokens!("print() # Does nothing", vec![
         Token::new(TokenType::Identifier, 1, 1, "print"),
         Token::new(TokenType::Lparen, 1, 6, "("),
