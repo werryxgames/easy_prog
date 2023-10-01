@@ -2,7 +2,7 @@ declvar("i", "first_op"),
 declvar("s", "operation"),
 declvar("i", "second_op"),
 
-set(first_op, parse_int(input())),
+set(first_op, parse_int(input()))
 
 ##
 SqN(

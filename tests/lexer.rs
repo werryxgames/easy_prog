@@ -1,8 +1,8 @@
-use easy_prog_i2::lexer::{to_tokens, Token, TokenType, LexerError};
+use easy_prog_i2::lexer::{to_tokens_rev, Token, TokenType, LexerError};
 
 macro_rules! test_tokens {
     ($code: expr, $tokens: expr) => {
-        let tokens = to_tokens($code).unwrap();
+        let tokens = to_tokens_rev($code).unwrap();
         let result = vec_cmp(&tokens, &$tokens);
 
         if !result {
@@ -15,12 +15,12 @@ macro_rules! test_tokens {
 
 macro_rules! test_error {
     ($code: expr, $error: expr) => {
-        let error = to_tokens($code).unwrap_err();
+        let error = to_tokens_rev($code).unwrap_err();
         assert_eq!(error, $error);
     };
 }
 
-fn vec_cmp<T: std::cmp::PartialEq>(vec1: &Vec<T>, vec2: &Vec<T>) -> bool {
+fn vec_cmp<T: PartialEq>(vec1: &Vec<T>, vec2: &Vec<T>) -> bool {
     let len = vec1.len();
 
     if len != vec2.len() {

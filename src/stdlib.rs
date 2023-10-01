@@ -1,10 +1,11 @@
 use std::{io::{self, Read}, fs};
+use std::rc::Rc;
 
-use crate::types::{Value, Type, Scope, Function, Int, Str, NativeException, Custom};
+use crate::types::{Type, Scope, Function, Int, Str, NativeException, Custom, Variant, Void};
 
 macro_rules! native_function {
     ($name: ident, $args: ident, $body: block) => {
-        pub fn $name($args: Vec<Value>) -> Result<Value, NativeException> { $body }
+        pub fn $name($args: Vec<Rc<dyn Variant>>) -> Result<Rc<dyn Variant>, NativeException> { $body }
     };
 }
 
@@ -20,36 +21,38 @@ macro_rules! ep_unpack {
 
 native_function!(print, args, {
     for arg in args {
-        match arg.ep_type {
-            Type::Int => { print!("{}", ep_unpack!(arg.ptr, Int).number); },
-            Type::Str => { print!("{}", ep_unpack!(arg.ptr, Str, clone).text); },
+        match arg.get_type() {
+            Type::Int => { print!("{}", arg.as_int().number); },
+            Type::Str => { print!("{}", arg.as_str().text); },
             Type::Void => { print!("<null>"); },
-            Type::Func => { print!("<function at address {:#}>", arg.ptr as u64) },
+            Type::Func => { print!("<function at address {:#}>", &arg.as_func() as *const Function as u64) },
             Type::Custom => {
-                let node = ep_unpack!(arg.ptr, Custom);
+                let node = arg.as_custom();
                 print!("<custom type {} at address {:#}>", node.id, node.ptr as u64);
             }
         }
     }
 
-    Ok(Value { ep_type: Type::Void, ptr: &mut () })
+    Ok(Rc::new(Void::new()))
 });
+
+
 
 native_function!(printerr, args, {
     for arg in args {
-        match arg.ep_type {
-            Type::Int => { eprint!("{}", ep_unpack!(arg.ptr, Int).number); },
-            Type::Str => { eprint!("{}", ep_unpack!(arg.ptr, Str, clone).text); },
+        match arg.get_type() {
+            Type::Int => { eprint!("{}", arg.as_int().number); },
+            Type::Str => { eprint!("{}", arg.as_str().text); },
             Type::Void => { eprint!("<null>"); },
-            Type::Func => { eprint!("<function at address {:#}>", arg.ptr as u64) },
+            Type::Func => { eprint!("<function at address {:#}>", &arg.as_func() as *const Function as u64) },
             Type::Custom => {
-                let node = ep_unpack!(arg.ptr, Custom);
+                let node = arg.as_custom();
                 eprint!("<custom type {} at address {:#}>", node.id, node.ptr as u64);
             }
         }
     }
 
-    Ok(Value { ep_type: Type::Void, ptr: &mut () })
+    Ok(Rc::new(Void::new()))
 });
 
 native_function!(input, args, {
@@ -57,10 +60,10 @@ native_function!(input, args, {
         return Err(NativeException { text: format!("This function takes 0 arguments, {} given", args.len()) });
     }
 
-    let buffer: &mut String = &mut "".to_string();
+    let buffer: &mut String = &mut String::new();
 
     if io::stdin().read_line(buffer).is_ok() {
-        return Ok(Value { ep_type: Type::Str, ptr: buffer as *mut String as *mut () });
+        return Ok(Rc::new(Str::new(buffer)));
     }
 
     Err(NativeException { text: "I/O error".to_string() })
@@ -71,18 +74,18 @@ native_function!(fopen, args, {
         return Err(NativeException { text: format!("This function takes 2 arguments, {} given", args.len()) });
     }
 
-    if args[0].ep_type != Type::Str {
+    if args[0].get_type() != Type::Str {
         return Err(NativeException { text: "First argument of this function should be `Str(path)`".to_string() })
     }
 
-    if args[1].ep_type != Type::Str {
+    if args[1].get_type() != Type::Str {
         return Err(NativeException { text: "Second argument of this function should be `Str(mode)`".to_string() });
     }
 
-    let path = ep_unpack!(args[0].ptr, Str, clone).text;
+    let path = args[0].as_str().text;
     let file;
 
-    match ep_unpack!(args[1].ptr, Str, clone).text.as_str() {
+    match args[1].as_str().text.as_str() {
         "w" => file = fs::File::create(path),
         "r" => file = fs::File::open(path),
         _ => { return Err(NativeException { text: "Unexpected mode. Possible values are `r` and `w`".to_string() }); }
@@ -92,7 +95,7 @@ native_function!(fopen, args, {
         return Err(NativeException { text: "I/O error".to_string() });
     }
 
-    Ok(Value { ep_type: Type::Custom, ptr: &mut Custom { id: 0, ptr: &mut file.unwrap() as *mut fs::File as *mut () } as *mut Custom as *mut () })
+    Ok(Rc::new(Custom::new(0, &mut file.unwrap() as *mut fs::File as *mut () )))
 });
 
 native_function!(fread, args, {
@@ -100,12 +103,12 @@ native_function!(fread, args, {
         return Err(NativeException { text: format!("This function takes 1 argument, {} given", args.len()) });
     }
 
-    if args[0].ep_type != Type::Custom {
+    if args[0].get_type() != Type::Custom {
         return Err(NativeException { text: "First argument of this function should be `File(path)`".to_string() });
     }
 
     let mut buffer: String = "".to_string();
-    let custom: Custom = ep_unpack!(args[0].ptr, Custom);
+    let custom: Custom = args[0].as_custom();
 
     if custom.id != 0 {
         return Err(NativeException { text: "First argument should be `File(path)`".to_string() });
@@ -117,7 +120,7 @@ native_function!(fread, args, {
         return Err(NativeException { text: "I/O error".to_string() });
     }
     
-    Ok(Value { ep_type: Type::Str, ptr: &mut Str { text: buffer } as *mut Str as *mut () })
+    Ok(Rc::new(Str::new(&buffer)))
 });
 
 native_function!(fwrite, args, {
@@ -125,12 +128,12 @@ native_function!(fwrite, args, {
         return Err(NativeException { text: format!("This function takes 2 arguments, {} given", args.len()) });
     }
 
-    if args[0].ep_type != Type::Custom {
+    if args[0].get_type() != Type::Custom {
         return Err(NativeException { text: "First argument of this function should be `File(path)`".to_string() });
     }
 
     let mut buffer: String = "".to_string();
-    let custom: Custom = ep_unpack!(args[0].ptr, Custom);
+    let custom: Custom = args[0].as_custom();
 
     if custom.id != 0 {
         return Err(NativeException { text: "First argument should be `File(path)`".to_string() });
@@ -142,7 +145,7 @@ native_function!(fwrite, args, {
         return Err(NativeException { text: "I/O error".to_string() });
     }
     
-    Ok(Value { ep_type: Type::Str, ptr: &mut Str { text: buffer } as *mut Str as *mut () })
+    Ok(Rc::new(Str::new(&buffer)))
 });
 
 native_function!(parse_int, args, {
@@ -150,18 +153,18 @@ native_function!(parse_int, args, {
         return Err(NativeException { text: format!("This function takes 1 argument, {} given", args.len()) });
     }
 
-    if args[0].ep_type != Type::Str {
+    if args[0].get_type() != Type::Str {
         return Err(NativeException { text: "First argument of this function should be `Str(number)`".to_string() });
     }
 
-    let integer = ep_unpack!(args[0].ptr, Str, clone).text;
+    let integer = args[0].as_str().text;
     let parse_result = integer.parse::<i64>();
 
     if parse_result.is_err() {
         return Err(NativeException { text: "Invalid number string".to_string() });
     }
 
-    Ok(Value { ep_type: Type::Int, ptr: &mut Int { number: parse_result.unwrap() } as *mut Int as *mut ()  })
+    Ok(Rc::new(Int::new(parse_result.unwrap())))
 });
 
 pub fn add_print(scope: &mut Scope) {

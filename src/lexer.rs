@@ -1,5 +1,5 @@
 #[repr(u8)]
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum TokenType {
     Unknown,
     Identifier,
@@ -15,7 +15,7 @@ pub enum TokenType {
     _CommentBlock
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Token {
     pub token_type: TokenType,
     pub content: String,
@@ -160,6 +160,14 @@ pub fn is_still_type(chr: char, token_type: &TokenType) -> bool {
     }
 }
 
+pub fn is_not_continuer(token: Token) -> bool {
+    token.token_type != TokenType::Lbrace && token.token_type != TokenType::Lparen && token.token_type != TokenType::Rbrace && token.token_type != TokenType::Rparen && token.token_type != TokenType::Comma
+}
+
+pub fn is_not_after_continuer(token: Token) -> bool {
+    token.token_type != TokenType::Rparen && token.token_type != TokenType::Rbrace && token.token_type != TokenType::Identifier && token.token_type != TokenType::Number && token.token_type != TokenType::String && token.token_type != TokenType::Lbrace
+}
+
 pub fn are_tokens_correct(tokens: &Vec<Token>) -> Result<(), LexerError> {
     // START:(Ident)
     // Ident:(Lparen...Ident=AIdent,Number=ANumber,String=AString...Rparen|Lbrace...Ident=AIdent,Number=ANumber,String=AString...Rbrace)
@@ -223,6 +231,18 @@ pub fn are_tokens_correct(tokens: &Vec<Token>) -> Result<(), LexerError> {
 
     i = 0;
 
+    macro_rules! check_paren {
+        ($i: ident, $tokens_length: ident, $scope_level: ident, $token: ident) => {
+            if $i >= $tokens_length {
+                if $scope_level == 0 {
+                    break;
+                }
+
+                return Err(LexerError { line: $token.line, column: $token.column, description: "Unterminated left parentheses (')')".to_string() });
+            }
+        };
+    }
+
     while i < tokens_length {
         let token = &tokens[i];
         i += 1;
@@ -233,7 +253,7 @@ pub fn are_tokens_correct(tokens: &Vec<Token>) -> Result<(), LexerError> {
                     return Err(LexerError { line: token.line, column: token.column, description: "Unterminated left parentheses (')')".to_string() });
                 }
 
-                if tokens[i].token_type != TokenType::Lbrace && tokens[i].token_type != TokenType::Lparen && tokens[i].token_type != TokenType::Rbrace && tokens[i].token_type != TokenType::Rparen && tokens[i].token_type != TokenType::Comma {
+                if is_not_continuer(tokens[i].clone()) {
                     return Err(LexerError { line: token.line, column: token.column, description: "Unexpected type after identifier".to_string() });
                 }
             },
@@ -242,7 +262,7 @@ pub fn are_tokens_correct(tokens: &Vec<Token>) -> Result<(), LexerError> {
                     return Err(LexerError { line: token.line, column: token.column, description: "Unterminated left parentheses (')')".to_string() });
                 }
 
-                if tokens[i].token_type != TokenType::Lbrace && tokens[i].token_type != TokenType::Lparen && tokens[i].token_type != TokenType::Rbrace && tokens[i].token_type != TokenType::Rparen && tokens[i].token_type != TokenType::Comma {
+                if is_not_continuer(tokens[i].clone()) {
                     return Err(LexerError { line: token.line, column: token.column, description: "Unexpected type after number".to_string() });
                 }
             },
@@ -251,20 +271,14 @@ pub fn are_tokens_correct(tokens: &Vec<Token>) -> Result<(), LexerError> {
                     return Err(LexerError { line: token.line, column: token.column, description: "Unterminated left parentheses (')')".to_string() });
                 }
 
-                if tokens[i].token_type != TokenType::Lbrace && tokens[i].token_type != TokenType::Lparen && tokens[i].token_type != TokenType::Rbrace && tokens[i].token_type != TokenType::Rparen && tokens[i].token_type != TokenType::Comma {
+                if is_not_continuer(tokens[i].clone()) {
                     return Err(LexerError { line: token.line, column: token.column, description: "Unexpected type after string".to_string() });
                 }
             },
             TokenType::Comma => {
-                if i >= tokens_length {
-                    if scope_level == 0 {
-                        break;
-                    }
+                check_paren!(i, tokens_length, scope_level, token);
 
-                    return Err(LexerError { line: token.line, column: token.column, description: "Unterminated left parentheses (')')".to_string() });
-                }
-
-                if tokens[i].token_type != TokenType::Rparen && tokens[i].token_type != TokenType::Rbrace && tokens[i].token_type != TokenType::Identifier && tokens[i].token_type != TokenType::Number && tokens[i].token_type != TokenType::String && tokens[i].token_type != TokenType::Lbrace {
+                if is_not_after_continuer(tokens[i].clone()) {
                     return Err(LexerError { line: token.line, column: token.column, description: "Unexpected type after comma (',')".to_string() });
                 }
             },
@@ -275,20 +289,14 @@ pub fn are_tokens_correct(tokens: &Vec<Token>) -> Result<(), LexerError> {
                     return Err(LexerError { line: token.line, column: token.column, description: "Unterminated left parentheses (')')".to_string() });
                 }
 
-                if tokens[i].token_type != TokenType::Comma &&tokens[i].token_type != TokenType::Rparen && tokens[i].token_type != TokenType::Rbrace && tokens[i].token_type != TokenType::Identifier && tokens[i].token_type != TokenType::Number && tokens[i].token_type != TokenType::String && tokens[i].token_type != TokenType::Lbrace {
+                if tokens[i].token_type != TokenType::Comma && is_not_after_continuer(tokens[i].clone()) {
                     return Err(LexerError { line: token.line, column: token.column, description: "Unexpected type after left parentheses ('(')".to_string() });
                 }
             },
             TokenType::Rparen => {
                 scope_level -= 1;
 
-                if i >= tokens_length {
-                    if scope_level == 0 {
-                        break;
-                    }
-
-                    return Err(LexerError { line: token.line, column: token.column, description: "Unterminated left parentheses (')')".to_string() });
-                }
+                check_paren!(i, tokens_length, scope_level, token);
 
                 if tokens[i].token_type != TokenType::Comma && tokens[i].token_type != TokenType::Rparen && tokens[i].token_type != TokenType::Rbrace {
                     return Err(LexerError { line: token.line, column: token.column, description: "Unexpected type after right parentheses (')')".to_string() });
@@ -301,20 +309,14 @@ pub fn are_tokens_correct(tokens: &Vec<Token>) -> Result<(), LexerError> {
                     return Err(LexerError { line: token.line, column: token.column, description: "Unterminated left parentheses (')')".to_string() });
                 }
 
-                if tokens[i].token_type != TokenType::Comma && tokens[i].token_type != TokenType::Rparen && tokens[i].token_type != TokenType::Identifier && tokens[i].token_type != TokenType::Number && tokens[i].token_type != TokenType::String && tokens[i].token_type != TokenType::Rbrace && tokens[i].token_type != TokenType::Lbrace {
+                if tokens[i].token_type != TokenType::Comma && is_not_after_continuer(tokens[i].clone()) {
                     return Err(LexerError { line: token.line, column: token.column, description: "Unexpected type after left brace ('{')".to_string() });
                 }
             },
             TokenType::Rbrace => {
                 scope_level -= 1;
 
-                if i >= tokens_length {
-                    if scope_level == 0 {
-                        break;
-                    }
-
-                    return Err(LexerError { line: token.line, column: token.column, description: "Unterminated left parentheses (')')".to_string() });
-                }
+                check_paren!(i, tokens_length, scope_level, token);
 
                 if tokens[i].token_type != TokenType::Comma && tokens[i].token_type != TokenType::Rparen && tokens[i].token_type != TokenType::Rbrace {
                     return Err(LexerError { line: token.line, column: token.column, description: "Unexpected type after right brace ('}')".to_string() });
@@ -452,8 +454,19 @@ fn _to_tokens(code: &str) -> Result<Vec<Token>, LexerError> {
     }
 }
 
-pub fn to_tokens(code: &str) -> Result<Vec<Token>, LexerError> {
+pub fn to_tokens_rev(code: &str) -> Result<Vec<Token>, LexerError> {
     let mut string = code.to_string();
     string.push('\n');
-    _to_tokens(&string)
+    let tokens: Result<Vec<Token>, LexerError> = _to_tokens(&string);
+    tokens
+}
+
+pub fn to_tokens(code: &str) -> Result<Vec<Token>, LexerError> {
+    let tokens = to_tokens_rev(code);
+
+    if tokens.is_err() {
+        return Err(unsafe { tokens.unwrap_err_unchecked() });
+    }
+
+    Ok(unsafe { tokens.unwrap_unchecked() })
 }
