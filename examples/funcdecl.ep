@@ -1,13 +1,13 @@
-declfunc("v", "print`Hello_World!", "v", {
+declfunc("v", "print_Hello_World", "v", {
     print("Hello, World")
 }),
 
-declfunc("i", "print`loop", "i", "total`times", {
-    forrng(total`times, {
-        print`Hello_World!()
+declfunc("i", "print_loop", "i", "total_times", {
+    forrng(total_times, {
+        print_Hello_World()
     }),
-    return(total`times)
+    return(total_times)
 }),
 
-declvar("i", result, print`loop(4)),
+declvar("i", result, print_loop(4)),
 print(result)

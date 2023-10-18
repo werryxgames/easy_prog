@@ -174,10 +174,9 @@ pub fn parse_func_body(tokens: &mut VecDeque<Token>) -> Result<SequenceNode, Par
     let last_token: Token = unsafe { tokens.pop_front().unwrap_unchecked() };
 
     if last_token.token_type != TokenType::Rbrace {
-        return Err(ParserError::new(token.line, token.column, "Unexpected token type, expected right brace ('{')", ParserErrorCode::UnexpectedType));
+        return Err(ParserError::new(token.line, token.column, "Unexpected token type, expected right brace ('}')", ParserErrorCode::UnexpectedType));
     }
 
-    tokens.pop_front();
     Ok(SequenceNode::new(unsafe { result.unwrap_unchecked() }))
 }
 
@@ -251,6 +250,7 @@ pub fn parse_program(tokens: &mut VecDeque<Token>) -> Result<SequenceNode, Parse
 
 pub fn parse(code: &str) -> Result<SequenceNode, ParserError> {
     let tokens_result = to_tokens(code);
+    println!("{:?}", tokens_result);
 
     if tokens_result.is_err() {
         let error = tokens_result.unwrap_err();
