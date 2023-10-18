@@ -1,7 +1,7 @@
 use std::{io::{self, Read}, fs};
 use std::rc::Rc;
 
-use crate::{types::{Type, Scope, Function, Int, Str, NativeException, Custom, Variant, Void, CallFuncNode, ConstStrNode, ConstIntNode}, runner};
+use crate::types::{Type, Scope, Function, Int, Str, NativeException, Custom, Variant, Void};
 
 macro_rules! native_function {
     ($name: ident, $scope: ident, $args: ident, $body: block) => {

@@ -29,14 +29,14 @@ struct AStruct {
 
 #[test]
 pub fn test_type_erased_ptr() {
-    let node: Rc<dyn AstNode> = Rc::new(ConstStrNode::new(Str::new("Hi")));
+    let node: Rc<dyn AstNode> = Rc::new(ConstStrNode::new(0, 0, Str::new("Hi")));
     let a_struct = AStruct { a: node };
     assert_eq!(a_struct.a.as_str_const().value.text, "Hi");
 }
 
 fn get_node() -> Rc<dyn AstNode> {
-    let node: Rc<dyn AstNode> = Rc::new(CallFuncNode::new("print".to_string(), vec![Rc::new(
-        ConstStrNode::new(Str::new("Hello, World!"))
+    let node: Rc<dyn AstNode> = Rc::new(CallFuncNode::new(0, 0, "print".to_string(), vec![Rc::new(
+        ConstStrNode::new(0, 0, Str::new("Hello, World!"))
     )]));
     node
 }
