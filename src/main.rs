@@ -2,7 +2,8 @@ use std::{fs, env};
 use std::io::Error;
 
 use easy_prog_i2::parser::parse;
-use easy_prog_i2::types::SequenceNode;
+use easy_prog_i2::runner::execute;
+use easy_prog_i2::types::{SequenceNode, Scope};
 
 fn main() {
     let args: Vec<String> = env::args().collect::<Vec<String>>();
@@ -36,5 +37,10 @@ fn main() {
 
     // unsafe { print_ast(parse_result.unwrap()); }
     let ast: SequenceNode = unsafe { parse_result.unwrap_unchecked() };
-    println!("{:?}", ast);
+    let exec_result = execute(&mut Scope::with_stdlib(), &ast);
+
+    if exec_result.is_some() {
+        let error = unsafe { exec_result.unwrap_unchecked() };
+        println!("{}: Runtime error on line {} column {}: {}", path, error.line, error.column, error.description);
+    }
 }

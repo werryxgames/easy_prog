@@ -98,6 +98,7 @@ pub fn parse_func_call(tokens: &mut VecDeque<Token>) -> Result<CallFuncNode, Par
     let cloned_tokens = tokens.clone();
     let mut iter = cloned_tokens.iter();
     let mut token: &Token = unsafe { iter.next().unwrap_unchecked() };
+    let first_token: &Token = token;
 
     if token.token_type != TokenType::Identifier {
         return Err(ParserError::new(token.line, token.column, "Unexpected token type, expected identifier", ParserErrorCode::UnexpectedType));
@@ -123,7 +124,7 @@ pub fn parse_func_call(tokens: &mut VecDeque<Token>) -> Result<CallFuncNode, Par
 
     if token.token_type == TokenType::Rparen {
         tokens.pop_front();
-        return Ok(CallFuncNode::new(func_name, Vec::new()));
+        return Ok(CallFuncNode::new(first_token.line, first_token.column, func_name, Vec::new()));
     }
 
     let nodes_result: Result<Vec<Rc<dyn AstNode>>, ParserError> = parse_expression_list(tokens, TokenType::Rparen);
@@ -141,7 +142,7 @@ pub fn parse_func_call(tokens: &mut VecDeque<Token>) -> Result<CallFuncNode, Par
     let last_token = unsafe { tokens.pop_front().unwrap_unchecked() };
 
     if last_token.token_type == TokenType::Rparen {
-        return Ok(CallFuncNode::new(func_name, nodes));
+        return Ok(CallFuncNode::new(first_token.line, first_token.column, func_name, nodes));
     }
 
     Err(ParserError::new(last_token.line, last_token.column, "Unexpected token type, expected right parentheses (')')", ParserErrorCode::ShortTokenList))
@@ -155,6 +156,7 @@ pub fn parse_func_body(tokens: &mut VecDeque<Token>) -> Result<SequenceNode, Par
     let cloned_tokens = tokens.clone();
     let mut iter = cloned_tokens.iter();
     let token: &Token = unsafe { iter.next().unwrap_unchecked() };
+    let first_token: &Token = token;
 
     if token.token_type != TokenType::Lbrace {
         return Err(ParserError::new(token.line, token.column, "Unexpected token type, expected left brace ('{')", ParserErrorCode::UnexpectedType));
@@ -177,7 +179,7 @@ pub fn parse_func_body(tokens: &mut VecDeque<Token>) -> Result<SequenceNode, Par
         return Err(ParserError::new(token.line, token.column, "Unexpected token type, expected right brace ('}')", ParserErrorCode::UnexpectedType));
     }
 
-    Ok(SequenceNode::new(unsafe { result.unwrap_unchecked() }))
+    Ok(SequenceNode::new(first_token.line, first_token.column, unsafe { result.unwrap_unchecked() }))
 }
 
 pub fn parse_expression(tokens: &mut VecDeque<Token>) -> Result<Rc<dyn AstNode>, ParserError> {
@@ -190,13 +192,13 @@ pub fn parse_expression(tokens: &mut VecDeque<Token>) -> Result<Rc<dyn AstNode>,
 
     if token.token_type == TokenType::String {
         tokens.pop_front();
-        let ast_box: Rc<dyn AstNode> = Rc::new(ConstStrNode::new(Str::new(&token.content)));
+        let ast_box: Rc<dyn AstNode> = Rc::new(ConstStrNode::new(token.line, token.column, Str::new(&token.content)));
         return Ok(ast_box);
     }
 
     if token.token_type == TokenType::Number {
         tokens.pop_front();
-        let ast_box: Rc<dyn AstNode> = Rc::new(ConstIntNode::new(Int::new(token.content.parse().unwrap())));
+        let ast_box: Rc<dyn AstNode> = Rc::new(ConstIntNode::new(token.line, token.column, Int::new(token.content.parse().unwrap())));
         return Ok(ast_box);
     }
 
@@ -220,7 +222,7 @@ pub fn parse_expression(tokens: &mut VecDeque<Token>) -> Result<Rc<dyn AstNode>,
         }
 
         tokens.pop_front();
-        let ast_box: Rc<dyn AstNode> = Rc::new(VariableNode::new(&token.content));
+        let ast_box: Rc<dyn AstNode> = Rc::new(VariableNode::new(token.line, token.column, &token.content));
         return Ok(ast_box);
     }
 
@@ -245,12 +247,11 @@ pub fn parse_program(tokens: &mut VecDeque<Token>) -> Result<SequenceNode, Parse
         return Err(unsafe { result.unwrap_err_unchecked() })
     }
 
-    return Ok(SequenceNode::new(unsafe { result.unwrap_unchecked() }));
+    return Ok(SequenceNode::new(1, 1, unsafe { result.unwrap_unchecked() }));
 }
 
 pub fn parse(code: &str) -> Result<SequenceNode, ParserError> {
     let tokens_result = to_tokens(code);
-    println!("{:?}", tokens_result);
 
     if tokens_result.is_err() {
         let error = tokens_result.unwrap_err();

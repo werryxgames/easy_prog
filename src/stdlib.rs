@@ -168,38 +168,38 @@ native_function!(parse_int, args, {
 });
 
 pub fn add_print(scope: &mut Scope) {
-    let mut func = Function { native: Some(print), body: None };
-    scope.functions.insert("print".to_string(), &mut func as *mut Function);
+    let func = Function { native: Some(print), body: None };
+    scope.functions.insert("print".to_string(), func);
 }
 
 pub fn add_printerr(scope: &mut Scope) {
-    let mut func = Function { native: Some(printerr), body: None };
-    scope.functions.insert("printerr".to_string(), &mut func as *mut Function);
+    let func = Function { native: Some(printerr), body: None };
+    scope.functions.insert("printerr".to_string(), func);
 }
 
 pub fn add_input(scope: &mut Scope) {
-    let mut func = Function { native: Some(input), body: None };
-    scope.functions.insert("input".to_string(), &mut func as *mut Function);
+    let func = Function { native: Some(input), body: None };
+    scope.functions.insert("input".to_string(), func);
 }
 
 pub fn add_fopen(scope: &mut Scope) {
-    let mut func = Function { native: Some(fopen), body: None };
-    scope.functions.insert("fopen".to_string(), &mut func as *mut Function);
+    let func = Function { native: Some(fopen), body: None };
+    scope.functions.insert("fopen".to_string(), func);
 }
 
 pub fn add_fread(scope: &mut Scope) {
-    let mut func = Function { native: Some(fread), body: None };
-    scope.functions.insert("fread".to_string(), &mut func as *mut Function);
+    let func = Function { native: Some(fread), body: None };
+    scope.functions.insert("fread".to_string(), func);
 }
 
 pub fn add_fwrite(scope: &mut Scope) {
-    let mut func = Function { native: Some(fwrite), body: None };
-    scope.functions.insert("fwrite".to_string(), &mut func as *mut Function);
+    let func = Function { native: Some(fwrite), body: None };
+    scope.functions.insert("fwrite".to_string(), func);
 }
 
 pub fn add_parseint(scope: &mut Scope) {
-    let mut func = Function { native: Some(parse_int), body: None };
-    scope.functions.insert("parse_int".to_string(), &mut func as *mut Function);
+    let func = Function { native: Some(parse_int), body: None };
+    scope.functions.insert("parse_int".to_string(), func);
 }
 
 pub fn add_stdio(scope: &mut Scope) {

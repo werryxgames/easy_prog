@@ -202,18 +202,6 @@ impl Debug for dyn AstNode {
     }
 }
 
-// #[derive(Debug, PartialEq, Clone, Eq)]
-// pub struct Node {
-//     pub node_type: NodeType,
-//     pub ptr: *mut ()
-// }
-//
-// impl Node {
-//     pub fn new(node_type: NodeType, ptr: *mut ()) -> Node {
-//         Node { node_type, ptr }
-//     }
-// }
-
 #[derive(Debug, Clone)]
 pub struct Function {
     pub native: Option<fn(args: Vec<Rc<dyn Variant>>) -> Result<Rc<dyn Variant>, NativeException>>,
@@ -279,12 +267,14 @@ impl Variant for Function {
 #[repr(C)]
 #[derive(Debug, Clone)]
 pub struct SequenceNode {
+    pub line: u32,
+    pub column: u32,
     pub body: Vec<Rc<dyn AstNode>>
 }
 
 impl SequenceNode {
-    pub fn new(body: Vec<Rc<dyn AstNode>>) -> SequenceNode {
-        SequenceNode { body }
+    pub fn new(line: u32, column: u32, body: Vec<Rc<dyn AstNode>>) -> SequenceNode {
+        SequenceNode { line, column, body }
     }
 }
 
@@ -337,13 +327,15 @@ impl AstNode for SequenceNode {
 #[repr(C)]
 #[derive(Debug, Clone)]
 pub struct CallFuncNode {
+    pub line: u32,
+    pub column: u32,
     pub name: String,
     pub args: Vec<Rc<dyn AstNode>>
 }
 
 impl CallFuncNode {
-    pub fn new(name: String, args: Vec<Rc<dyn AstNode>>) -> CallFuncNode {
-        CallFuncNode { name, args }
+    pub fn new(line: u32, column: u32, name: String, args: Vec<Rc<dyn AstNode>>) -> CallFuncNode {
+        CallFuncNode { line, column, name, args }
     }
 }
 
@@ -383,12 +375,14 @@ impl AstNode for CallFuncNode {
 #[repr(C)]
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub struct ConstIntNode {
+    pub line: u32,
+    pub column: u32,
     pub value: Int
 }
 
 impl ConstIntNode {
-    pub fn new(value: Int) -> ConstIntNode {
-        ConstIntNode { value }
+    pub fn new(line: u32, column: u32, value: Int) -> ConstIntNode {
+        ConstIntNode { line, column, value }
     }
 }
 
@@ -425,12 +419,14 @@ impl AstNode for ConstIntNode {
 #[repr(C)]
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub struct ConstStrNode {
+    pub line: u32,
+    pub column: u32,
     pub value: Str
 }
 
 impl ConstStrNode {
-    pub fn new(value: Str) -> ConstStrNode {
-        ConstStrNode { value }
+    pub fn new(line: u32, column: u32, value: Str) -> ConstStrNode {
+        ConstStrNode { line, column, value }
     }
 }
 
@@ -467,12 +463,14 @@ impl AstNode for ConstStrNode {
 #[repr(C)]
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub struct VariableNode {
+    pub line: u32,
+    pub column: u32,
     pub name: String
 }
 
 impl VariableNode {
-    pub fn new(name: &str) -> VariableNode {
-        VariableNode { name: name.to_string() }
+    pub fn new(line: u32, column: u32, name: &str) -> VariableNode {
+        VariableNode { line, column, name: name.to_string() }
     }
 }
 
@@ -520,12 +518,12 @@ impl NativeException {
 #[derive(Debug, Clone)]
 pub struct Scope {
     pub variables: HashMap<String, Rc<dyn Variant>>,
-    pub functions: HashMap<String, *mut Function>,
+    pub functions: HashMap<String, Function>,
     pub parent_scope: Option<*const Scope>
 }
 
 impl Scope {
-    pub fn new(variables: HashMap<String, Rc<dyn Variant>>, functions: HashMap<String, *mut Function>, parent: Option<*const Scope>) -> Scope {
+    pub fn new(variables: HashMap<String, Rc<dyn Variant>>, functions: HashMap<String, Function>, parent: Option<*const Scope>) -> Scope {
         Scope { variables, functions, parent_scope: parent }
     }
 
@@ -571,11 +569,11 @@ impl Scope {
         self.functions.contains_key(name) || (self.parent_scope.is_some() && unsafe { (*self.parent_scope.unwrap()).has_function(name) })
     }
 
-    pub fn get_function(&self, name: &str) -> Option<*mut Function> {
+    pub fn get_function(&self, name: &str) -> Option<&Function> {
         let func = self.functions.get(name);
         
         if func.is_some() {
-            return Some(func.unwrap() as *const *mut Function as *mut Function);
+            return Some(func.unwrap());
         }
 
         if self.parent_scope.is_some() {
@@ -585,7 +583,7 @@ impl Scope {
         None
     }
 
-    pub fn set_function(&mut self, name: &str, func: *mut Function) -> Option<*mut Function> {
+    pub fn set_function(&mut self, name: &str, func: Function) -> Option<Function> {
         self.functions.insert(name.to_string(), func)
     }
 }
