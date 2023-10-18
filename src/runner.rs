@@ -74,7 +74,7 @@ pub fn execute_func(scope: &mut Scope, node: CallFuncNode) -> Result<Result<Rc<d
         return Ok(Ok(Rc::new(Void::new())));
     }
     else if func.native.is_some() {
-        return Ok(unsafe { func.native.unwrap_unchecked() }(value_args));
+        return Ok(unsafe { func.native.unwrap_unchecked() }(scope, value_args));
     }
     
     return Err(RunnerError::new(node.line, node.column, &format!("Function '{}' defined in current scope, but neither native nor custom", node.name)));

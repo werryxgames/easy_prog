@@ -204,29 +204,17 @@ impl Debug for dyn AstNode {
 
 #[derive(Debug, Clone)]
 pub struct Function {
-    pub native: Option<fn(args: Vec<Rc<dyn Variant>>) -> Result<Rc<dyn Variant>, NativeException>>,
+    pub native: Option<fn(scope: &mut Scope, args: Vec<Rc<dyn Variant>>) -> Result<Rc<dyn Variant>, NativeException>>,
     pub body: Option<SequenceNode>
 }
 
 impl Function {
-    pub fn new_native(func: fn(args: Vec<Rc<dyn Variant>>) -> Result<Rc<dyn Variant>, NativeException>) -> Function {
+    pub fn new_native(func: fn(scope: &mut Scope, args: Vec<Rc<dyn Variant>>) -> Result<Rc<dyn Variant>, NativeException>) -> Function {
         Function { native: Some(func), body: None }
     }
 
     pub fn new(body: SequenceNode) -> Function {
         Function { native: None, body: Some(body) }
-    }
-
-    pub fn call(self, args: Vec<Rc<dyn Variant>>) -> Option<Result<Rc<dyn Variant>, NativeException>> {
-        if self.native.is_some() {
-            return Some(self.native.unwrap()(args));
-        }
-
-        if self.body.is_none() {
-            return None;
-        }
-
-        todo!();
     }
 }
 
