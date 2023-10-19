@@ -1,4 +1,5 @@
-set("first_op", parse_int(input())),
+set("input_v", input()),
+set("first_op", parse_int("123\n")),
 inspect_scope(),
-#print(first_op)
+print(first_op)
 

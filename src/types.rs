@@ -204,12 +204,12 @@ impl Debug for dyn AstNode {
 
 #[derive(Debug, Clone)]
 pub struct Function {
-    pub native: Option<fn(scope: &mut Scope, args: Vec<Rc<dyn Variant>>) -> Result<Rc<dyn Variant>, NativeException>>,
+    pub native: Option<fn(line: u32, column: u32, scope: &mut Scope, args: Vec<Rc<dyn Variant>>) -> Result<Rc<dyn Variant>, NativeException>>,
     pub body: Option<SequenceNode>
 }
 
 impl Function {
-    pub fn new_native(func: fn(scope: &mut Scope, args: Vec<Rc<dyn Variant>>) -> Result<Rc<dyn Variant>, NativeException>) -> Function {
+    pub fn new_native(func: fn(line: u32, column: u32, scope: &mut Scope, args: Vec<Rc<dyn Variant>>) -> Result<Rc<dyn Variant>, NativeException>) -> Function {
         Function { native: Some(func), body: None }
     }
 
@@ -494,12 +494,14 @@ impl AstNode for VariableNode {
 
 #[derive(Debug, Clone)]
 pub struct NativeException {
-    pub text: String
+    pub line: u32,
+    pub column: u32,
+    pub description: String
 }
 
 impl NativeException {
-    pub fn new(text: &str) -> NativeException {
-        NativeException { text: text.to_string() }
+    pub fn new(line: u32, column: u32, description: &str) -> NativeException {
+        NativeException { line, column, description: description.to_string() }
     }
 }
 

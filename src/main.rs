@@ -37,10 +37,6 @@ fn main() {
 
     // unsafe { print_ast(parse_result.unwrap()); }
     let ast: SequenceNode = unsafe { parse_result.unwrap_unchecked() };
-    let exec_result = execute(&mut Scope::with_stdlib(), &ast);
-
-    if exec_result.is_some() {
-        let error = unsafe { exec_result.unwrap_unchecked() };
-        println!("{}: Runtime error on line {} column {}: {}", path, error.line, error.column, error.description);
-    }
+    let mut scope: Scope = Scope::with_stdlib();
+    let exec_result = execute(&mut scope, &ast, path);
 }

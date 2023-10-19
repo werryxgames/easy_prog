@@ -4,8 +4,8 @@ use std::rc::Rc;
 use crate::types::{Type, Scope, Function, Int, Str, NativeException, Custom, Variant, Void};
 
 macro_rules! native_function {
-    ($name: ident, $scope: ident, $args: ident, $body: block) => {
-        pub fn $name($scope: &mut Scope, $args: Vec<Rc<dyn Variant>>) -> Result<Rc<dyn Variant>, NativeException> { $body }
+    ($name: ident, $line: ident, $column: ident, $scope: ident, $args: ident, $body: block) => {
+        pub fn $name($line: u32, $column: u32, $scope: &mut Scope, $args: Vec<Rc<dyn Variant>>) -> Result<Rc<dyn Variant>, NativeException> { $body }
     };
 }
 
@@ -19,7 +19,7 @@ macro_rules! ep_unpack {
     };
 }
 
-native_function!(print, _scope, args, {
+native_function!(print, _line, _column, _scope, args, {
     for arg in args {
         match arg.get_type() {
             Type::Int => { print!("{}", arg.as_int().number); },
@@ -38,7 +38,7 @@ native_function!(print, _scope, args, {
 
 
 
-native_function!(printerr, _scope, args, {
+native_function!(printerr, _line, _column, _scope, args, {
     for arg in args {
         match arg.get_type() {
             Type::Int => { eprint!("{}", arg.as_int().number); },
@@ -55,9 +55,9 @@ native_function!(printerr, _scope, args, {
     Ok(Rc::new(Void::new()))
 });
 
-native_function!(inspect_scope, scope, args, {
+native_function!(inspect_scope, line, column, scope, args, {
     if args.len() != 0 {
-        return Err(NativeException { text: format!("This function takes 0 arguments, {} given", args.len()) });
+        return Err(NativeException::new(line, column, &format!("This function takes 0 arguments, {} given", args.len())));
     }
 
     println!("Begin of inspection");
@@ -74,9 +74,9 @@ native_function!(inspect_scope, scope, args, {
     Ok(Rc::new(Void::new()))
 });
 
-native_function!(input, _scope, args, {
+native_function!(input, line, column, _scope, args, {
     if args.len() != 0 {
-        return Err(NativeException { text: format!("This function takes 0 arguments, {} given", args.len()) });
+        return Err(NativeException::new(line, column, &format!("This function takes 0 arguments, {} given", args.len())));
     }
 
     let buffer: &mut String = &mut String::new();
@@ -85,20 +85,20 @@ native_function!(input, _scope, args, {
         return Ok(Rc::new(Str::new(buffer)));
     }
 
-    Err(NativeException { text: "I/O error".to_string() })
+    Err(NativeException::new(line, column, "I/O error"))
 });
 
-native_function!(fopen, _scope, args, {
+native_function!(fopen, line, column, _scope, args, {
     if args.len() != 2 {
-        return Err(NativeException { text: format!("This function takes 2 arguments, {} given", args.len()) });
+        return Err(NativeException::new(line, column, &format!("This function takes 2 arguments, {} given", args.len())));
     }
 
     if args[0].get_type() != Type::Str {
-        return Err(NativeException { text: "First argument of this function should be `Str(path)`".to_string() })
+        return Err(NativeException::new(line, column, "First argument of this function should be `Str(path)`"));
     }
 
     if args[1].get_type() != Type::Str {
-        return Err(NativeException { text: "Second argument of this function should be `Str(mode)`".to_string() });
+        return Err(NativeException::new(line, column, "Second argument of this function should be `Str(mode)`"));
     }
 
     let path = args[0].as_str().text;
@@ -107,36 +107,36 @@ native_function!(fopen, _scope, args, {
     match args[1].as_str().text.as_str() {
         "w" => file = fs::File::create(path),
         "r" => file = fs::File::open(path),
-        _ => { return Err(NativeException { text: "Unexpected mode. Possible values are `r` and `w`".to_string() }); }
+        _ => { return Err(NativeException::new(line, column, "Unexpected mode. Possible values are `r` and `w`")); }
     };
 
     if file.is_err() {
-        return Err(NativeException { text: "I/O error".to_string() });
+        return Err(NativeException::new(line, column, "I/O error"));
     }
 
     Ok(Rc::new(Custom::new(0, &mut file.unwrap() as *mut fs::File as *mut () )))
 });
 
-native_function!(fread, _scope, args, {
+native_function!(fread, line, column, _scope, args, {
     if args.len() != 1 {
-        return Err(NativeException { text: format!("This function takes 1 argument, {} given", args.len()) });
+        return Err(NativeException::new(line, column, &format!("This function takes 1 argument, {} given", args.len())));
     }
 
     if args[0].get_type() != Type::Custom {
-        return Err(NativeException { text: "First argument of this function should be `File(path)`".to_string() });
+        return Err(NativeException::new(line, column, "First argument of this function should be `File(path)`"));
     }
 
     let mut buffer: String = "".to_string();
     let custom: Custom = args[0].as_custom();
 
     if custom.id != 0 {
-        return Err(NativeException { text: "First argument should be `File(path)`".to_string() });
+        return Err(NativeException::new(line, column, "First argument should be `File(path)`"));
     }
 
     let file_result = ep_unpack!(custom.ptr, fs::File, try_clone).unwrap().read_to_string(&mut buffer);
 
     if file_result.is_err() {
-        return Err(NativeException { text: "I/O error".to_string() });
+        return Err(NativeException::new(line, column, "I/O error"));
     }
     
     Ok(Rc::new(Str::new(&buffer)))

@@ -37,7 +37,7 @@ pub fn execute_func(scope: &mut Scope, node: CallFuncNode) -> Result<Result<Rc<d
                 value_args.push(Rc::new(Function::new(arg.as_sequence())));
             },
             NodeType::CallFunc => {
-                let result = execute_func(scope, arg.as_call_func());
+                let result = execute_func(&mut *scope, arg.as_call_func());
 
                 if result.is_err() {
                     return unsafe { Err(result.unwrap_err_unchecked()) };
@@ -58,7 +58,7 @@ pub fn execute_func(scope: &mut Scope, node: CallFuncNode) -> Result<Result<Rc<d
                 value_args.push(Rc::new(arg.as_str_const().value));
             },
             NodeType::Identifier => {
-                let result = get_variable(scope, arg.as_variable());
+                let result = get_variable(&mut *scope, arg.as_variable());
 
                 if result.is_err() {
                     return Err(unsafe { result.unwrap_err_unchecked() });
@@ -70,33 +70,53 @@ pub fn execute_func(scope: &mut Scope, node: CallFuncNode) -> Result<Result<Rc<d
     }
 
     if func.body.is_some() {
-        execute_sequence(scope, unsafe { func.body.as_ref().unwrap_unchecked() });
+        execute_sequence(&mut *scope, unsafe { func.body.as_ref().unwrap_unchecked() });
         return Ok(Ok(Rc::new(Void::new())));
     }
     else if func.native.is_some() {
-        return Ok(unsafe { func.native.unwrap_unchecked() }(scope, value_args));
+        let var = unsafe { func.native.unwrap_unchecked() }(scope, value_args);
+        return Ok(var);
     }
     
     return Err(RunnerError::new(node.line, node.column, &format!("Function '{}' defined in current scope, but neither native nor custom", node.name)));
 }
 
-pub fn execute_sequence(scope: &mut Scope, node: &SequenceNode) -> Option<RunnerError> {
+pub fn execute_sequence(scope: &mut Scope, node: &SequenceNode) -> Option<Result<RunnerError, NativeException>> {
     for child in node.body.iter() {
         if child.get_type() != NodeType::CallFunc {
             panic!();
         }
 
-        let result = execute_func(scope, child.as_call_func());
+        let result = execute_func(&mut *scope, child.as_call_func());
 
         if result.is_err() {
-            return Some(unsafe { result.unwrap_err_unchecked() });
+            return Some(Ok(unsafe { result.unwrap_err_unchecked() }));
+        }
+
+        let result2 = unsafe { result.unwrap_unchecked() };
+
+        if result2.is_err() {
+            return Some(Err(unsafe { result2.unwrap_err_unchecked() }));
         }
     }
 
     None
 }
 
-pub fn execute(scope: &mut Scope, ast: &SequenceNode) -> Option<RunnerError> {
-    execute_sequence(scope, ast)
+pub fn execute(scope: &mut Scope, ast: &SequenceNode, path: &str) {
+    let exec_result = execute_sequence(&mut *scope, ast);
+
+    if exec_result.is_some() {
+        let error = unsafe { exec_result.unwrap_unchecked() };
+
+        if error.is_ok() {
+            let error2 = unsafe { error.unwrap_unchecked() };
+            println!("{}: Runtime error on line {} column {}: {}", path, error2.line, error2.column, error2.description);
+        }
+        else {
+            let error2 = unsafe { error.unwrap_err_unchecked() };
+            println!("{}: Native function exception on line {} column {}: {}", path, error2.line, error2.column, error2.description);
+        }
+    }
 }
 
