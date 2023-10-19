@@ -82,6 +82,10 @@ native_function!(input, line, column, _scope, args, {
     let buffer: &mut String = &mut String::new();
 
     if io::stdin().read_line(buffer).is_ok() {
+        if buffer.ends_with("\n") {
+            return Ok(Rc::new(Str::new(&buffer[..buffer.len() - 1])));
+        }
+
         return Ok(Rc::new(Str::new(buffer)));
     }
 
@@ -142,74 +146,74 @@ native_function!(fread, line, column, _scope, args, {
     Ok(Rc::new(Str::new(&buffer)))
 });
 
-native_function!(fwrite, _scope, args, {
+native_function!(fwrite, line, column, _scope, args, {
     if args.len() != 2 {
-        return Err(NativeException { text: format!("This function takes 2 arguments, {} given", args.len()) });
+        return Err(NativeException::new(line, column, &format!("This function takes 2 arguments, {} given", args.len())));
     }
 
     if args[0].get_type() != Type::Custom {
-        return Err(NativeException { text: "First argument of this function should be `File(path)`".to_string() });
+        return Err(NativeException::new(line, column, "First argument of this function should be `File(path)`"));
     }
 
     let mut buffer: String = "".to_string();
     let custom: Custom = args[0].as_custom();
 
     if custom.id != 0 {
-        return Err(NativeException { text: "First argument should be `File(path)`".to_string() });
+        return Err(NativeException::new(line, column, "First argument should be `File(path)`"));
     }
 
     let file_result = ep_unpack!(custom.ptr, fs::File, try_clone).unwrap().read_to_string(&mut buffer);
 
     if file_result.is_err() {
-        return Err(NativeException { text: "I/O error".to_string() });
+        return Err(NativeException::new(line, column, "I/O error"));
     }
     
     Ok(Rc::new(Str::new(&buffer)))
 });
 
-native_function!(parse_int, _scope, args, {
+native_function!(parse_int, line, column, _scope, args, {
     if args.len() != 1 {
-        return Err(NativeException { text: format!("This function takes 1 argument, {} given", args.len()) });
+        return Err(NativeException::new(line, column, &format!("This function takes 1 argument, {} given", args.len())));
     }
 
     if args[0].get_type() != Type::Str {
-        return Err(NativeException { text: "First argument of this function should be `Str(number)`".to_string() });
+        return Err(NativeException::new(line, column, "First argument of this function should be `Str(number)`"));
     }
 
     let integer = args[0].as_str().text;
     let parse_result = integer.parse::<i64>();
 
     if parse_result.is_err() {
-        return Err(NativeException { text: "Invalid number string".to_string() });
+        return Err(NativeException::new(line, column, "Invalid number string"));
     }
 
     Ok(Rc::new(Int::new(parse_result.unwrap())))
 });
 
-native_function!(declfunc, scope, args, {
+native_function!(declfunc, line, column, scope, args, {
     if args.len() != 2 {
-        return Err(NativeException { text: format!("This function takes 2 arguments, {} given", args.len()) });
+        return Err(NativeException::new(line, column, &format!("This function takes 2 arguments, {} given", args.len())));
     }
 
     if args[0].get_type() != Type::Str {
-        return Err(NativeException { text: "First argument of this function should be `Str(name)`".to_string() });
+        return Err(NativeException::new(line, column, "First argument of this function should be `Str(name)`"));
     }
 
     if args[1].get_type() != Type::Func {
-        return Err(NativeException { text: "Second argument of this function should be `Func(body)`".to_string() });
+        return Err(NativeException::new(line, column, "Second argument of this function should be `Func(body)`"));
     }
 
     scope.functions.insert(args[0].as_str().text, args[1].as_func());
     Ok(Rc::new(Void::new()))
 });
 
-native_function!(set, scope, args, {
+native_function!(set, line, column, scope, args, {
     if args.len() != 2 {
-        return Err(NativeException { text: format!("This function takes 2 arguments, {} given", args.len()) });
+        return Err(NativeException::new(line, column, &format!("This function takes 2 arguments, {} given", args.len())));
     }
 
     if args[0].get_type() != Type::Str {
-        return Err(NativeException { text: "First argument of this function should be `Str(name)`".to_string() });
+        return Err(NativeException::new(line, column, "First argument of this function should be `Str(name)`"));
     }
 
     scope.variables.insert(args[0].as_str().text, args[1].clone());

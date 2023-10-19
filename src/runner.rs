@@ -74,7 +74,7 @@ pub fn execute_func(scope: &mut Scope, node: CallFuncNode) -> Result<Result<Rc<d
         return Ok(Ok(Rc::new(Void::new())));
     }
     else if func.native.is_some() {
-        let var = unsafe { func.native.unwrap_unchecked() }(scope, value_args);
+        let var = unsafe { func.native.unwrap_unchecked() }(node.line, node.column, scope, value_args);
         return Ok(var);
     }
     

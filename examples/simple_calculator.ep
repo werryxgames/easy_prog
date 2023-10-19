@@ -1,5 +1,3 @@
-set("input_v", input()),
-set("first_op", parse_int("123\n")),
-inspect_scope(),
+set("first_op", parse_int(input())),
 print(first_op)
 
