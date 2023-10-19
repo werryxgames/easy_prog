@@ -1,7 +1,7 @@
-use std::{io::{self, Read}, fs};
+use std::{io::{self, Read, Write}, fs};
 use std::rc::Rc;
 
-use crate::types::{Type, Scope, Function, Int, Str, NativeException, Custom, Variant, Void};
+use crate::types::{Type, Scope, Function, Int, Str, NativeException, Custom, Variant, Void, SequenceNode};
 
 macro_rules! native_function {
     ($name: ident, $line: ident, $column: ident, $scope: ident, $args: ident, $body: block) => {
@@ -36,8 +36,6 @@ native_function!(print, _line, _column, _scope, args, {
     Ok(Rc::new(Void::new()))
 });
 
-
-
 native_function!(printerr, _line, _column, _scope, args, {
     for arg in args {
         match arg.get_type() {
@@ -52,25 +50,6 @@ native_function!(printerr, _line, _column, _scope, args, {
         }
     }
 
-    Ok(Rc::new(Void::new()))
-});
-
-native_function!(inspect_scope, line, column, scope, args, {
-    if args.len() != 0 {
-        return Err(NativeException::new(line, column, &format!("This function takes 0 arguments, {} given", args.len())));
-    }
-
-    println!("Begin of inspection");
-
-    for variable in scope.variables.clone() {
-        println!("Variable {} = {:?}", variable.0, variable.1);
-    }
-
-    for function in scope.functions.clone() {
-        println!("Function {} = {:?}", function.0, function.1);
-    }
-
-    println!("End of inspection");
     Ok(Rc::new(Void::new()))
 });
 
@@ -155,20 +134,23 @@ native_function!(fwrite, line, column, _scope, args, {
         return Err(NativeException::new(line, column, "First argument of this function should be `File(path)`"));
     }
 
-    let mut buffer: String = "".to_string();
+    if args[1].get_type() != Type::Str {
+        return Err(NativeException::new(line, column, "Second argument of this function should be `Str(data)`"));
+    }
+
     let custom: Custom = args[0].as_custom();
 
     if custom.id != 0 {
         return Err(NativeException::new(line, column, "First argument should be `File(path)`"));
     }
 
-    let file_result = ep_unpack!(custom.ptr, fs::File, try_clone).unwrap().read_to_string(&mut buffer);
+    let file_result = ep_unpack!(custom.ptr, fs::File, try_clone).unwrap().write_all(args[1].as_str().text.as_bytes());
 
     if file_result.is_err() {
         return Err(NativeException::new(line, column, "I/O error"));
     }
-    
-    Ok(Rc::new(Str::new(&buffer)))
+
+    Ok(Rc::new(Void::new()))
 });
 
 native_function!(parse_int, line, column, _scope, args, {
@@ -188,6 +170,22 @@ native_function!(parse_int, line, column, _scope, args, {
     }
 
     Ok(Rc::new(Int::new(parse_result.unwrap())))
+});
+
+native_function!(lf, line, column, _scope, args, {
+    if args.len() != 0 {
+        return Err(NativeException::new(line, column, &format!("This function takes 0 arguments, {} given", args.len())));
+    }
+
+    Ok(Rc::new(Str::new("\n")))
+});
+
+native_function!(cr, line, column, _scope, args, {
+    if args.len() != 0 {
+        return Err(NativeException::new(line, column, &format!("This function takes 0 arguments, {} given", args.len())));
+    }
+
+    Ok(Rc::new(Str::new("\r")))
 });
 
 native_function!(declfunc, line, column, scope, args, {
@@ -220,6 +218,57 @@ native_function!(set, line, column, scope, args, {
     Ok(Rc::new(Void::new()))
 });
 
+native_function!(null, line, column, scope, args, {
+    if args.len() != 1 {
+        return Err(NativeException::new(line, column, &format!("This function takes 1 argument, {} given", args.len())));
+    }
+
+    if args[0].get_type() != Type::Str {
+        return Err(NativeException::new(line, column, "First argument of this function should be `Str(name)`"));
+    }
+
+    let var_name = args[0].as_str().text;
+    let var_result = scope.variables.get(&var_name);
+
+    if var_result.is_none() {
+        return Err(NativeException::new(line, column, &format!("Variable '{}' isn't found in the current scope", var_name)));
+    }
+
+    let var = unsafe { var_result.unwrap_unchecked() };
+    let var_type = var.get_type();
+
+    if var_type == Type::Int {
+        scope.variables.insert(var_name, Rc::new(Int::new(0)));
+    } else if var_type == Type::Str {
+        scope.variables.insert(var_name, Rc::new(Str::new("")));
+    } else if var_type == Type::Func {
+        scope.variables.insert(var_name, Rc::new(Function::new(SequenceNode::new(line, column, Vec::new()))));
+    } else if var_type == Type::Custom {
+        return Err(NativeException::new(line, column, "Reset custom error: Function null() is inavailable for custom types"));
+    }
+
+    Ok(Rc::new(Void::new()))
+});
+
+native_function!(inspect_scope, line, column, scope, args, {
+    if args.len() != 0 {
+        return Err(NativeException::new(line, column, &format!("This function takes 0 arguments, {} given", args.len())));
+    }
+
+    println!("Begin of inspection");
+
+    for variable in scope.variables.clone() {
+        println!("Variable {} = {:?}", variable.0, variable.1);
+    }
+
+    for function in scope.functions.clone() {
+        println!("Function {} = {:?}", function.0, function.1);
+    }
+
+    println!("End of inspection");
+    Ok(Rc::new(Void::new()))
+});
+
 pub fn add_print(scope: &mut Scope) {
     let func = Function { native: Some(print), body: None };
     scope.functions.insert("print".to_string(), func);
@@ -233,11 +282,6 @@ pub fn add_printerr(scope: &mut Scope) {
 pub fn add_input(scope: &mut Scope) {
     let func = Function { native: Some(input), body: None };
     scope.functions.insert("input".to_string(), func);
-}
-
-pub fn add_inspect_scope(scope: &mut Scope) {
-    let func = Function { native: Some(inspect_scope), body: None };
-    scope.functions.insert("inspect_scope".to_string(), func);
 }
 
 pub fn add_fopen(scope: &mut Scope) {
@@ -270,11 +314,15 @@ pub fn add_set(scope: &mut Scope) {
     scope.functions.insert("set".to_string(), func);
 }
 
+pub fn add_inspect_scope(scope: &mut Scope) {
+    let func = Function { native: Some(inspect_scope), body: None };
+    scope.functions.insert("inspect_scope".to_string(), func);
+}
+
 pub fn add_stdio(scope: &mut Scope) {
     add_print(scope);
     add_printerr(scope);
     add_input(scope);
-    add_inspect_scope(scope);
 }
 
 pub fn add_fileio(scope: &mut Scope) {
@@ -297,8 +345,19 @@ pub fn add_core(scope: &mut Scope) {
     add_set(scope);
 }
 
+pub fn add_debug(scope: &mut Scope) {
+    add_inspect_scope(scope);
+}
+
+pub fn add_vars(scope: &mut Scope) {
+    scope.variables.insert("true".to_string(), Rc::new(Int::new(1)));
+    scope.variables.insert("false".to_string(), Rc::new(Int::new(0)));
+}
+
 pub fn add_stdlib(scope: &mut Scope) {
     add_io(scope);
     add_string(scope);
     add_core(scope);
+    add_debug(scope);
+    add_vars(scope);
 }

@@ -1,6 +1,6 @@
-use std::rc::Rc;
+use std::{rc::Rc, fs, io::Error};
 
-use crate::types::{SequenceNode, NodeType, Scope, CallFuncNode, Variant, Function, NativeException, VariableNode, Void};
+use crate::{types::{SequenceNode, NodeType, Scope, CallFuncNode, Variant, Function, NativeException, VariableNode, Void}, parser::parse};
 
 #[derive(Debug)]
 pub struct RunnerError {
@@ -103,7 +103,7 @@ pub fn execute_sequence(scope: &mut Scope, node: &SequenceNode) -> Option<Result
     None
 }
 
-pub fn execute(scope: &mut Scope, ast: &SequenceNode, path: &str) {
+pub fn execute(scope: &mut Scope, ast: &SequenceNode, path: &str) -> bool {
     let exec_result = execute_sequence(&mut *scope, ast);
 
     if exec_result.is_some() {
@@ -112,11 +112,56 @@ pub fn execute(scope: &mut Scope, ast: &SequenceNode, path: &str) {
         if error.is_ok() {
             let error2 = unsafe { error.unwrap_unchecked() };
             println!("{}: Runtime error on line {} column {}: {}", path, error2.line, error2.column, error2.description);
+            return false;
         }
         else {
             let error2 = unsafe { error.unwrap_err_unchecked() };
             println!("{}: Native function exception on line {} column {}: {}", path, error2.line, error2.column, error2.description);
+            return false;
         }
     }
+
+    true
+}
+
+pub fn run_code_scope(code: &str, scope: &mut Scope) -> bool {
+    let parse_result = parse(code);
+
+    if parse_result.is_err() {
+        let error = unsafe { parse_result.unwrap_err_unchecked() };
+        println!("Code: Error on line {} column {}: {}", error.line, error.column, error.description);
+        return false;
+    }
+
+    execute(scope, &unsafe { parse_result.unwrap_unchecked() }, "Code")
+}
+
+pub fn run_code(code: &str) -> bool {
+    run_code_scope(code, &mut Scope::with_stdlib())
+}
+
+pub fn run_file_scope(path: &str, scope: &mut Scope) -> bool {
+    let code: Result<String, Error> = fs::read_to_string(path);
+
+    if code.is_err() {
+        println!("{}: File error: {}", path, code.unwrap_err());
+        return false;
+    }
+
+    let parse_result = parse(&code.unwrap());
+
+    if parse_result.is_err() {
+        let error = unsafe { parse_result.unwrap_err_unchecked() };
+        println!("{}: Error on line {} column {}: {}", path, error.line, error.column, error.description);
+        return false;
+    }
+
+    let ast: SequenceNode = unsafe { parse_result.unwrap_unchecked() };
+    execute(scope, &ast, path)
+}
+
+pub fn run_file(path: &str) -> bool {
+    let mut scope: Scope = Scope::with_stdlib();
+    run_file_scope(path, &mut scope)
 }
 
