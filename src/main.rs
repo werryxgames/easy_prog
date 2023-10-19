@@ -38,5 +38,5 @@ fn main() {
     // unsafe { print_ast(parse_result.unwrap()); }
     let ast: SequenceNode = unsafe { parse_result.unwrap_unchecked() };
     let mut scope: Scope = Scope::with_stdlib();
-    let exec_result = execute(&mut scope, &ast, path);
+    execute(&mut scope, &ast, path);
 }
