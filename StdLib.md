@@ -252,7 +252,7 @@ Prints all variables and functions defined in current scope.
 
 ## Format
 
-`Int|Str|Func|Custom|Variant` name = <value>.
+`Int|Str|Func|Custom|Variant` name = `<value>`.
 
 
 
