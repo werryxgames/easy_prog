@@ -3,5 +3,5 @@
 version = 3
 
 [[package]]
-name = "easy_prog_i2"
+name = "easy_prog"
 version = "0.1.0"

@@ -1,9 +1,9 @@
 use std::{fs, env};
 use std::io::Error;
 
-use easy_prog_i2::parser::parse;
-use easy_prog_i2::runner::execute;
-use easy_prog_i2::types::{SequenceNode, Scope};
+use easy_prog::parser::parse;
+use easy_prog::runner::execute;
+use easy_prog::types::{SequenceNode, Scope};
 
 fn main() {
     let args: Vec<String> = env::args().collect::<Vec<String>>();

@@ -1,4 +1,4 @@
-use easy_prog_i2::types::{Scope, Function};
+use easy_prog::types::{Scope, Function};
 
 #[test]
 fn test_scope_from_scope() {

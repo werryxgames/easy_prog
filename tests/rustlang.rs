@@ -1,5 +1,5 @@
 use std::rc::Rc;
-use easy_prog_i2::types::{AstNode, CallFuncNode, ConstStrNode, Str};
+use easy_prog::types::{AstNode, CallFuncNode, ConstStrNode, Str};
 
 #[test]
 pub fn test_iter() {

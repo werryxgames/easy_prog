@@ -1,4 +1,4 @@
-use easy_prog_i2::lexer::{to_tokens_rev, Token, TokenType, LexerError};
+use easy_prog::lexer::{to_tokens_rev, Token, TokenType, LexerError};
 
 macro_rules! test_tokens {
     ($code: expr, $tokens: expr) => {

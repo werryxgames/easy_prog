@@ -1,4 +1,4 @@
-use easy_prog_i2::parser::parse;
+use easy_prog::parser::parse;
 
 #[test]
 fn test_hello_world() {
