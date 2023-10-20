@@ -1,7 +1,7 @@
-use std::{io::{self, Read, Write}, fs};
+use std::{io::{self, Read, Write}, fs, process};
 use std::rc::Rc;
 
-use crate::types::{Type, Scope, Function, Int, Str, NativeException, Custom, Variant, Void, SequenceNode};
+use crate::{types::{Type, Scope, Function, Int, Str, NativeException, Custom, Variant, Void, SequenceNode}, runner::execute_sequence};
 
 macro_rules! native_function {
     ($name: ident, $line: ident, $column: ident, $scope: ident, $args: ident, $body: block) => {
@@ -36,6 +36,20 @@ native_function!(print, _line, _column, _scope, args, {
     Ok(Rc::new(Void::new()))
 });
 
+native_function!(flush_stdout, line, column, _scope, args, {
+    if args.len() != 0 {
+        return Err(NativeException::new(line, column, &format!("This function takes 0 arguments, {} given", args.len())));
+    }
+
+    let result = io::stdout().flush();
+
+    if result.is_err() {
+        return Err(NativeException::new(line, column, &format!("I/O error")));
+    }
+
+    Ok(Rc::new(Void::new()))
+});
+
 native_function!(printerr, _line, _column, _scope, args, {
     for arg in args {
         match arg.get_type() {
@@ -58,6 +72,7 @@ native_function!(input, line, column, _scope, args, {
         return Err(NativeException::new(line, column, &format!("This function takes 0 arguments, {} given", args.len())));
     }
 
+    io::stdout().flush().unwrap();
     let buffer: &mut String = &mut String::new();
 
     if io::stdin().read_line(buffer).is_ok() {
@@ -244,10 +259,246 @@ native_function!(null, line, column, scope, args, {
     } else if var_type == Type::Func {
         scope.variables.insert(var_name, Rc::new(Function::new(SequenceNode::new(line, column, Vec::new()))));
     } else if var_type == Type::Custom {
-        return Err(NativeException::new(line, column, "Reset custom error: Function null() is inavailable for custom types"));
+        return Err(NativeException::new(line, column, "Reset custom error: Function null() is unavailable for custom types"));
     }
 
     Ok(Rc::new(Void::new()))
+});
+
+native_function!(if_, line, column, scope, args, {
+    if args.len() != 2 {
+        return Err(NativeException::new(line, column, &format!("This function takes 2 arguments, {} given", args.len())));
+    }
+
+    if args[0].get_type() != Type::Int {
+        return Err(NativeException::new(line, column, "First argument of this function should be `Int(condition)`"));
+    }
+
+    if args[1].get_type() != Type::Func {
+        return Err(NativeException::new(line, column, "Second argument of this function should be `Func(body)`"));
+    }
+
+    if args[0].as_int().number == 0 {
+        return Ok(Rc::new(Void::new()));
+    }
+
+    let result = execute_sequence(scope, &args[1].as_func().body.unwrap());
+
+    if result.is_some() {
+        let result2 = unsafe { result.unwrap_unchecked() };
+
+        if result2.is_ok() {
+            let error = unsafe { result2.unwrap_unchecked() };
+            return Err(NativeException::new(error.line, error.column, &error.description));
+        } else {
+            return unsafe { Err(result2.unwrap_err_unchecked()) };
+        }
+    }
+
+    Ok(Rc::new(Void::new()))
+});
+
+native_function!(if_else, line, column, scope, args, {
+    if args.len() != 3 {
+        return Err(NativeException::new(line, column, &format!("This function takes 3 arguments, {} given", args.len())));
+    }
+
+    if args[0].get_type() != Type::Int {
+        return Err(NativeException::new(line, column, "First argument of this function should be `Int(condition)`"));
+    }
+
+    if args[1].get_type() != Type::Func {
+        return Err(NativeException::new(line, column, "Second argument of this function should be `Func(if_branch)`"));
+    }
+
+    if args[2].get_type() != Type::Func {
+        return Err(NativeException::new(line, column, "Third argument of this function should be `Func(else_branch)`"));
+    }
+
+    if args[0].as_int().number == 0 {
+        let result = execute_sequence(scope, &args[2].as_func().body.unwrap());
+
+        if result.is_some() {
+            let result2 = unsafe { result.unwrap_unchecked() };
+
+            if result2.is_ok() {
+                let error = unsafe { result2.unwrap_unchecked() };
+                return Err(NativeException::new(error.line, error.column, &error.description));
+            } else {
+                return unsafe { Err(result2.unwrap_err_unchecked()) };
+            }
+        }
+
+        return Ok(Rc::new(Void::new()));
+    }
+
+    let result = execute_sequence(scope, &args[1].as_func().body.unwrap());
+
+    if result.is_some() {
+        let result2 = unsafe { result.unwrap_unchecked() };
+
+        if result2.is_ok() {
+            let error = unsafe { result2.unwrap_unchecked() };
+            return Err(NativeException::new(error.line, error.column, &error.description));
+        } else {
+            return unsafe { Err(result2.unwrap_err_unchecked()) };
+        }
+    }
+
+    Ok(Rc::new(Void::new()))
+});
+
+native_function!(add, line, column, _scope, args, {
+    if args.len() != 2 {
+        return Err(NativeException::new(line, column, &format!("This function takes 2 arguments, {} given", args.len())));
+    }
+
+    if args[0].get_type() != Type::Int {
+        return Err(NativeException::new(line, column, "First argument of this function should be `Int(a)`"));
+    }
+
+    if args[1].get_type() != Type::Int {
+        return Err(NativeException::new(line, column, "Second argument of this function should be `Int(b)`"));
+    }
+
+    Ok(Rc::new(Int::new(args[0].as_int().number.wrapping_add(args[1].as_int().number))))
+});
+
+native_function!(subt, line, column, _scope, args, {
+    if args.len() != 2 {
+        return Err(NativeException::new(line, column, &format!("This function takes 2 arguments, {} given", args.len())));
+    }
+
+    if args[0].get_type() != Type::Int {
+        return Err(NativeException::new(line, column, "First argument of this function should be `Int(a)`"));
+    }
+
+    if args[1].get_type() != Type::Int {
+        return Err(NativeException::new(line, column, "Second argument of this function should be `Int(b)`"));
+    }
+
+    Ok(Rc::new(Int::new(args[0].as_int().number.wrapping_sub(args[1].as_int().number))))
+});
+
+native_function!(mult, line, column, _scope, args, {
+    if args.len() != 2 {
+        return Err(NativeException::new(line, column, &format!("This function takes 2 arguments, {} given", args.len())));
+    }
+
+    if args[0].get_type() != Type::Int {
+        return Err(NativeException::new(line, column, "First argument of this function should be `Int(a)`"));
+    }
+
+    if args[1].get_type() != Type::Int {
+        return Err(NativeException::new(line, column, "Second argument of this function should be `Int(b)`"));
+    }
+
+    Ok(Rc::new(Int::new(args[0].as_int().number.wrapping_mul(args[1].as_int().number))))
+});
+
+native_function!(idiv, line, column, _scope, args, {
+    if args.len() != 2 {
+        return Err(NativeException::new(line, column, &format!("This function takes 2 arguments, {} given", args.len())));
+    }
+
+    if args[0].get_type() != Type::Int {
+        return Err(NativeException::new(line, column, "First argument of this function should be `Int(a)`"));
+    }
+
+    if args[1].get_type() != Type::Int {
+        return Err(NativeException::new(line, column, "Second argument of this function should be `Int(b)`"));
+    }
+
+    let b = args[1].as_int().number;
+
+    if b == 0 {
+        return Err(NativeException::new(line, column, "Division by zero"));
+    }
+
+    Ok(Rc::new(Int::new(args[0].as_int().number / b)))
+});
+
+native_function!(and, line, column, _scope, args, {
+    if args.len() != 2 {
+        return Err(NativeException::new(line, column, &format!("This function takes 2 arguments, {} given", args.len())));
+    }
+
+    if args[0].get_type() != Type::Int {
+        return Err(NativeException::new(line, column, "First argument of this function should be `Int(a)`"));
+    }
+
+    if args[1].get_type() != Type::Int {
+        return Err(NativeException::new(line, column, "Second argument of this function should be `Int(b)`"));
+    }
+
+    Ok(Rc::new(Int::new((args[0].as_int().number != 0 && args[1].as_int().number != 0) as i64)))
+});
+
+native_function!(or, line, column, _scope, args, {
+    if args.len() != 2 {
+        return Err(NativeException::new(line, column, &format!("This function takes 2 arguments, {} given", args.len())));
+    }
+
+    if args[0].get_type() != Type::Int {
+        return Err(NativeException::new(line, column, "First argument of this function should be `Int(a)`"));
+    }
+
+    if args[1].get_type() != Type::Int {
+        return Err(NativeException::new(line, column, "Second argument of this function should be `Int(b)`"));
+    }
+
+    Ok(Rc::new(Int::new((args[0].as_int().number != 0 || args[1].as_int().number != 0) as i64)))
+});
+
+native_function!(eq, line, column, _scope, args, {
+    if args.len() != 2 {
+        return Err(NativeException::new(line, column, &format!("This function takes 2 arguments, {} given", args.len())));
+    }
+
+    let a = &args[0];
+    let b = &args[1];
+    let a_type = a.get_type();
+
+    if a_type != b.get_type() {
+        return Ok(Rc::new(Int::new(0)));
+    }
+
+    Ok(Rc::new(Int::new((a == b) as i64)))
+});
+
+native_function!(neq, line, column, _scope, args, {
+    if args.len() != 2 {
+        return Err(NativeException::new(line, column, &format!("This function takes 2 arguments, {} given", args.len())));
+    }
+
+    let a = &args[0];
+    let b = &args[1];
+    let a_type = a.get_type();
+
+    if a_type != b.get_type() {
+        return Ok(Rc::new(Int::new(0)));
+    }
+
+    Ok(Rc::new(Int::new((a != b) as i64)))
+});
+
+native_function!(exit, line, column, _scope, args, {
+    let exit_code: i32;
+    let args_len = args.len();
+
+    if args_len == 0 {
+        exit_code = 0i32;
+    } else if args_len == 1 {
+        if args[0].get_type() != Type::Int {
+            return Err(NativeException::new(line, column, &format!("First argument of this function should be `Int(code)`")));
+        }
+
+        exit_code = args[0].as_int().number as i32;
+    } else {
+        return Err(NativeException::new(line, column, &format!("This function takes at most 1 argument, {} given", args.len())));
+    }
+
+    process::exit(exit_code)
 });
 
 native_function!(inspect_scope, line, column, scope, args, {
@@ -270,62 +521,138 @@ native_function!(inspect_scope, line, column, scope, args, {
 });
 
 pub fn add_print(scope: &mut Scope) {
-    let func = Function { native: Some(print), body: None };
+    let func = Function::new_native(print);
     scope.functions.insert("print".to_string(), func);
 }
 
+pub fn add_flush_stdout(scope: &mut Scope) {
+    let func = Function::new_native(print);
+    scope.functions.insert("flush_stdout".to_string(), func);
+}
+
 pub fn add_printerr(scope: &mut Scope) {
-    let func = Function { native: Some(printerr), body: None };
+    let func = Function::new_native(printerr);
     scope.functions.insert("printerr".to_string(), func);
 }
 
 pub fn add_input(scope: &mut Scope) {
-    let func = Function { native: Some(input), body: None };
+    let func = Function::new_native(input);
     scope.functions.insert("input".to_string(), func);
 }
 
 pub fn add_fopen(scope: &mut Scope) {
-    let func = Function { native: Some(fopen), body: None };
+    let func = Function::new_native(fopen);
     scope.functions.insert("fopen".to_string(), func);
 }
 
 pub fn add_fread(scope: &mut Scope) {
-    let func = Function { native: Some(fread), body: None };
+    let func = Function::new_native(fread);
     scope.functions.insert("fread".to_string(), func);
 }
 
 pub fn add_fwrite(scope: &mut Scope) {
-    let func = Function { native: Some(fwrite), body: None };
+    let func = Function::new_native(fwrite);
     scope.functions.insert("fwrite".to_string(), func);
 }
 
-pub fn add_parseint(scope: &mut Scope) {
-    let func = Function { native: Some(parse_int), body: None };
+pub fn add_parse_int(scope: &mut Scope) {
+    let func = Function::new_native(parse_int);
     scope.functions.insert("parse_int".to_string(), func);
 }
 
+pub fn add_lf(scope: &mut Scope) {
+    let func = Function::new_native(lf);
+    scope.functions.insert("lf".to_string(), func);
+}
+
+pub fn add_cr(scope: &mut Scope) {
+    let func = Function::new_native(cr);
+    scope.functions.insert("cr".to_string(), func);
+}
+
 pub fn add_declfunc(scope: &mut Scope) {
-    let func = Function { native: Some(declfunc), body: None };
+    let func = Function::new_native(declfunc);
     scope.functions.insert("declfunc".to_string(), func);
 }
 
 pub fn add_set(scope: &mut Scope) {
-    let func = Function { native: Some(set), body: None };
+    let func = Function::new_native(set);
     scope.functions.insert("set".to_string(), func);
 }
 
+pub fn add_null(scope: &mut Scope) {
+    let func = Function::new_native(null);
+    scope.functions.insert("null".to_string(), func);
+}
+
+pub fn add_if(scope: &mut Scope) {
+    let func = Function::new_native(if_);
+    scope.functions.insert("if".to_string(), func);
+}
+
+pub fn add_if_else(scope: &mut Scope) {
+    let func = Function::new_native(if_else);
+    scope.functions.insert("if_else".to_string(), func);
+}
+
+pub fn add_add(scope: &mut Scope) {
+    let func = Function::new_native(add);
+    scope.functions.insert("add".to_string(), func);
+}
+
+pub fn add_subt(scope: &mut Scope) {
+    let func = Function::new_native(subt);
+    scope.functions.insert("subt".to_string(), func);
+}
+
+pub fn add_mult(scope: &mut Scope) {
+    let func = Function::new_native(mult);
+    scope.functions.insert("mult".to_string(), func);
+}
+
+pub fn add_idiv(scope: &mut Scope) {
+    let func = Function::new_native(idiv);
+    scope.functions.insert("idiv".to_string(), func);
+}
+
+pub fn add_and(scope: &mut Scope) {
+    let func = Function::new_native(and);
+    scope.functions.insert("and".to_string(), func);
+}
+
+pub fn add_or(scope: &mut Scope) {
+    let func = Function::new_native(or);
+    scope.functions.insert("or".to_string(), func);
+}
+
+pub fn add_eq(scope: &mut Scope) {
+    let func = Function::new_native(eq);
+    scope.functions.insert("eq".to_string(), func);
+}
+
+pub fn add_neq(scope: &mut Scope) {
+    let func = Function::new_native(neq);
+    scope.functions.insert("neq".to_string(), func);
+}
+
+pub fn add_exit(scope: &mut Scope) {
+    let func = Function::new_native(exit);
+    scope.functions.insert("exit".to_string(), func);
+}
+
 pub fn add_inspect_scope(scope: &mut Scope) {
-    let func = Function { native: Some(inspect_scope), body: None };
+    let func = Function::new_native(inspect_scope);
     scope.functions.insert("inspect_scope".to_string(), func);
 }
 
 pub fn add_stdio(scope: &mut Scope) {
     add_print(scope);
+    add_flush_stdout(scope);
     add_printerr(scope);
     add_input(scope);
 }
 
-pub fn add_fileio(scope: &mut Scope) {
+pub fn add_file_io(scope: &mut Scope) {
     add_fopen(scope);
     add_fread(scope);
     add_fwrite(scope);
@@ -333,20 +660,13 @@ pub fn add_fileio(scope: &mut Scope) {
 
 pub fn add_io(scope: &mut Scope) {
     add_stdio(scope);
-    add_fileio(scope);
+    add_file_io(scope);
 }
 
 pub fn add_string(scope: &mut Scope) {
-    add_parseint(scope);
-}
-
-pub fn add_core(scope: &mut Scope) {
-    add_declfunc(scope);
-    add_set(scope);
-}
-
-pub fn add_debug(scope: &mut Scope) {
-    add_inspect_scope(scope);
+    add_parse_int(scope);
+    add_lf(scope);
+    add_cr(scope);
 }
 
 pub fn add_vars(scope: &mut Scope) {
@@ -354,10 +674,31 @@ pub fn add_vars(scope: &mut Scope) {
     scope.variables.insert("false".to_string(), Rc::new(Int::new(0)));
 }
 
+pub fn add_core(scope: &mut Scope) {
+    add_declfunc(scope);
+    add_set(scope);
+    add_null(scope);
+    add_if(scope);
+    add_if_else(scope);
+    add_add(scope);
+    add_subt(scope);
+    add_mult(scope);
+    add_idiv(scope);
+    add_and(scope);
+    add_or(scope);
+    add_eq(scope);
+    add_neq(scope);
+    add_exit(scope);
+    add_vars(scope);
+}
+
+pub fn add_debug(scope: &mut Scope) {
+    add_inspect_scope(scope);
+}
+
 pub fn add_stdlib(scope: &mut Scope) {
     add_io(scope);
     add_string(scope);
     add_core(scope);
     add_debug(scope);
-    add_vars(scope);
 }

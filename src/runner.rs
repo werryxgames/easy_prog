@@ -114,11 +114,10 @@ pub fn execute(scope: &mut Scope, ast: &SequenceNode, path: &str) -> bool {
             println!("{}: Runtime error on line {} column {}: {}", path, error2.line, error2.column, error2.description);
             return false;
         }
-        else {
-            let error2 = unsafe { error.unwrap_err_unchecked() };
-            println!("{}: Native function exception on line {} column {}: {}", path, error2.line, error2.column, error2.description);
-            return false;
-        }
+
+        let error2 = unsafe { error.unwrap_err_unchecked() };
+        println!("{}: Native function exception on line {} column {}: {}", path, error2.line, error2.column, error2.description);
+        return false;
     }
 
     true

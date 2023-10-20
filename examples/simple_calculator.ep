@@ -1,3 +1,26 @@
+print("Enter first number: "),
 set("first_op", parse_int(input())),
-print(first_op)
+print("Enter operation: "),
+set("operation", input()),
+if(and(and(and(neq(operation, "+"), neq(operation, "-")), neq(operation, "*")), neq(operation, "/")), {
+    print("Incorrect operation. Expected one of '+', '-', '*', '/'.", lf()),
+    exit(1)
+}),
+print("Enter second number: "),
+set("second_op", parse_int(input())),
+print("Result is "),
+if_else(eq(operation, "+"), {
+    print(add(first_op, second_op))
+}, {
+    if_else(eq(operation, "-"), {
+        print(subt(first_op, second_op))
+    }, {
+        if_else(eq(operation, "*"), {
+            print(mult(first_op, second_op))
+        }, {
+            print(idiv(first_op, second_op))
+        })
+    })
+}),
+print(lf())
 

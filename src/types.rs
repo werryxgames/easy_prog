@@ -31,11 +31,18 @@ pub trait Variant {
     fn as_func(&self) -> Function;
     fn as_custom(&self) -> Custom;
     fn print(&self, f: &mut Formatter<'_>) -> std::fmt::Result;
+    fn equals(&self, other: &dyn Variant) -> bool;
 }
 
 impl Debug for dyn Variant {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         self.print(f)
+    }
+}
+
+impl PartialEq for dyn Variant {
+    fn eq(&self, other: &Self) -> bool {
+        self.equals(other)
     }
 }
 
@@ -74,6 +81,10 @@ impl Variant for Int {
     fn print(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.write_fmt(format_args!("{}", self.number))
     }
+
+    fn equals(&self, other: &dyn Variant) -> bool {
+        self.number == other.as_int().number
+    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -110,6 +121,14 @@ impl Variant for Str {
 
     fn print(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.write_fmt(format_args!("\"{}\"", self.text))
+    }
+
+    fn equals(&self, other: &dyn Variant) -> bool {
+        if self.get_type() != other.get_type() {
+            return false;
+        }
+
+        self.text == other.as_str().text
     }
 }
 
@@ -149,6 +168,16 @@ impl Variant for Custom {
     fn print(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.write_fmt(format_args!("Custom({}, {:?})", self.id, self.ptr))
     }
+
+    fn equals(&self, other: &dyn Variant) -> bool {
+        if self.get_type() != other.get_type() {
+            return false;
+        }
+
+        let other_var = other.as_custom();
+
+        self.id == other_var.id && self.ptr == other_var.ptr
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -184,6 +213,10 @@ impl Variant for Void {
     fn print(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.write_str("Void")
     }
+
+    fn equals(&self, other: &dyn Variant) -> bool {
+        self.get_type() == other.get_type()
+    }
 }
 
 pub trait AstNode {
@@ -194,11 +227,18 @@ pub trait AstNode {
     fn as_int_const(&self) -> ConstIntNode;
     fn as_variable(&self) -> VariableNode;
     fn print(&self, f: &mut Formatter<'_>) -> std::fmt::Result;
+    fn equals(&self, other: &dyn AstNode) -> bool;
 }
 
 impl Debug for dyn AstNode {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         self.print(f)
+    }
+}
+
+impl PartialEq for dyn AstNode {
+    fn eq(&self, other: &Self) -> bool {
+        self.equals(other)
     }
 }
 
@@ -215,6 +255,31 @@ impl Function {
 
     pub fn new(body: SequenceNode) -> Function {
         Function { native: None, body: Some(body) }
+    }
+}
+
+impl PartialEq for Function {
+    fn eq(&self, other: &Self) -> bool {
+        if self.native != other.native {
+            return false;
+        }
+
+        if self.body.is_some() != self.body.is_some() {
+            return false;
+        }
+
+        if self.body.is_none() {
+            return true;
+        }
+
+        let body1 = unsafe { self.body.clone().unwrap_unchecked() }.body;
+        let body2 = unsafe { other.body.clone().unwrap_unchecked() }.body;
+
+        if body1.len() != body2.len() {
+            return false;
+        }
+
+        body1 == body2
     }
 }
 
@@ -249,6 +314,24 @@ impl Variant for Function {
         }
 
         f.write_str("NullFunction")
+    }
+
+    fn equals(&self, other: &dyn Variant) -> bool {
+        if self.get_type() != other.get_type() {
+            return false;
+        }
+
+        let other_var = other.as_func();
+
+        if self.body.is_some() != other_var.body.is_some() {
+            return false;
+        }
+
+        if self.body.is_none() {
+            return self.native == other_var.native;
+        }
+
+        self.native == other_var.native && self.as_func().body.unwrap().body == other_var.body.unwrap().body
     }
 }
 
@@ -310,6 +393,14 @@ impl AstNode for SequenceNode {
         print_list!(f, iter);
         f.write_str(")")
     }
+
+    fn equals(&self, other: &dyn AstNode) -> bool {
+        if self.get_type() != other.get_type() {
+            return false;
+        }
+
+        self.as_sequence().body == other.as_sequence().body
+    }
 }
 
 #[repr(C)]
@@ -358,6 +449,18 @@ impl AstNode for CallFuncNode {
         print_list!(f, iter);
         f.write_str("])")
     }
+
+    fn equals(&self, other: &dyn AstNode) -> bool {
+        if self.get_type() != other.get_type() {
+            return false;
+        }
+
+        if self.as_call_func().name == other.as_call_func().name {
+            return false;
+        }
+
+        self.as_call_func().args == other.as_call_func().args
+    }
 }
 
 #[repr(C)]
@@ -401,6 +504,14 @@ impl AstNode for ConstIntNode {
 
     fn print(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         self.value.print(f)
+    }
+
+    fn equals(&self, other: &dyn AstNode) -> bool {
+        if self.get_type() != other.get_type() {
+            return false;
+        }
+
+        self.as_int_const().value == other.as_int_const().value
     }
 }
 
@@ -446,6 +557,14 @@ impl AstNode for ConstStrNode {
     fn print(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         self.value.print(f)
     }
+
+    fn equals(&self, other: &dyn AstNode) -> bool {
+        if self.get_type() != other.get_type() {
+            return false;
+        }
+
+        self.as_str_const().value == other.as_str_const().value
+    }
 }
 
 #[repr(C)]
@@ -489,6 +608,14 @@ impl AstNode for VariableNode {
 
     fn print(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.write_str(&self.name)
+    }
+
+    fn equals(&self, other: &dyn AstNode) -> bool {
+        if self.get_type() != other.get_type() {
+            return false;
+        }
+
+        self.as_variable().name == other.as_variable().name
     }
 }
 
