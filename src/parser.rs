@@ -9,7 +9,8 @@ pub enum ParserErrorCode {
     EmptyTokenList,
     Lexer,
     UnexpectedType,
-    ShortTokenList
+    ShortTokenList,
+    InvalidValue
 }
 
 #[derive(Debug)]
@@ -224,7 +225,13 @@ pub fn parse_expression(tokens: &mut Vector<Token>) -> Result<Rc<dyn AstNode>, P
 
     if token.token_type == TokenType::Number {
         tokens.pop_front();
-        let ast_box: Rc<dyn AstNode> = Rc::new(ConstIntNode::new(token.line, token.column, Int::new(token.content.parse().unwrap())));
+        let result = token.content.parse();
+
+        if result.is_err() {
+            return Err(ParserError::new(token.line, token.column, "Integer value overflowed", ParserErrorCode::InvalidValue));
+        }
+
+        let ast_box: Rc<dyn AstNode> = Rc::new(ConstIntNode::new(token.line, token.column, Int::new(unsafe { result.unwrap_unchecked() })));
         return Ok(ast_box);
     }
 
@@ -276,10 +283,10 @@ pub fn parse(code: &str) -> Result<SequenceNode, ParserError> {
     let tokens_result = to_tokens(code);
 
     if tokens_result.is_err() {
-        let error = tokens_result.unwrap_err();
+        let error = unsafe { tokens_result.unwrap_err_unchecked() };
         return Err(ParserError { line: error.line, column: error.column, description: error.description, code: ParserErrorCode::Lexer });
     }
 
-    let tokens: VecDeque<Token> = VecDeque::from(tokens_result.unwrap());
+    let tokens: VecDeque<Token> = VecDeque::from(unsafe { tokens_result.unwrap_unchecked() });
     parse_program(&mut Vector::new(tokens))
 }

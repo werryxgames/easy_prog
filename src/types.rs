@@ -331,7 +331,7 @@ impl Variant for Function {
             return self.native == other_var.native;
         }
 
-        self.native == other_var.native && self.as_func().body.unwrap().body == other_var.body.unwrap().body
+        self.native == other_var.native && unsafe { self.body.as_ref().unwrap_unchecked() }.body == unsafe { other_var.body.as_ref().unwrap_unchecked() }.body
     }
 }
 
@@ -662,18 +662,18 @@ impl Scope {
     }
 
     pub fn has_variable(&self, name: &str) -> bool {
-        self.variables.contains_key(name) || (self.parent_scope.is_some() && unsafe { (*self.parent_scope.unwrap()).has_variable(name) })
+        self.variables.contains_key(name) || (self.parent_scope.is_some() && unsafe { (*self.parent_scope.unwrap_unchecked()).has_variable(name) })
     }
 
     pub fn get_variable(&self, name: &str) -> Option<&Rc<dyn Variant>> {
         let var = self.variables.get(name);
         
         if var.is_some() {
-            return Some(var.unwrap());
+            return Some(unsafe { var.unwrap_unchecked() });
         }
 
         if self.parent_scope.is_some() {
-            return unsafe { (*self.parent_scope.unwrap()).get_variable(name) };
+            return unsafe { (*self.parent_scope.unwrap_unchecked()).get_variable(name) };
         }
 
         None
@@ -684,18 +684,18 @@ impl Scope {
     }
 
     pub fn has_function(&self, name: &str) -> bool {
-        self.functions.contains_key(name) || (self.parent_scope.is_some() && unsafe { (*self.parent_scope.unwrap()).has_function(name) })
+        self.functions.contains_key(name) || (self.parent_scope.is_some() && unsafe { (*self.parent_scope.unwrap_unchecked()).has_function(name) })
     }
 
     pub fn get_function(&self, name: &str) -> Option<&Function> {
         let func = self.functions.get(name);
         
         if func.is_some() {
-            return Some(func.unwrap());
+            return Some(unsafe { func.unwrap_unchecked() });
         }
 
         if self.parent_scope.is_some() {
-            return unsafe { (*self.parent_scope.unwrap()).get_function(name) };
+            return unsafe { (*self.parent_scope.unwrap_unchecked()).get_function(name) };
         }
 
         None

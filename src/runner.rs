@@ -105,14 +105,29 @@ pub fn execute_sequence(scope: &mut Scope, node: &SequenceNode) -> Option<Result
     None
 }
 
-pub fn add_cleanup_destructor(destructor: fn(&mut Scope)) {
-    DESTRUCTORS.lock().unwrap().push(destructor);
+pub fn add_cleanup_destructor(destructor: fn(&mut Scope)) -> bool {
+    let locked = DESTRUCTORS.lock();
+
+    if locked.is_err() {
+        return false;
+    }
+
+    unsafe { locked.unwrap_unchecked() }.push(destructor);
+    true
 }
 
-pub fn cleanup(scope: &mut Scope) {
-    for destructor in DESTRUCTORS.lock().unwrap().iter() {
+pub fn cleanup(scope: &mut Scope) -> bool {
+    let locked = DESTRUCTORS.lock();
+
+    if locked.is_err() {
+        return false;
+    }
+
+    for destructor in unsafe { locked.unwrap_unchecked() }.iter() {
         destructor(scope);
     }
+
+    true
 }
 
 pub fn execute(scope: &mut Scope, ast: &SequenceNode, path: &str) -> bool {
@@ -156,11 +171,11 @@ pub fn run_file_scope(path: &str, scope: &mut Scope) -> bool {
     let code: Result<String, Error> = fs::read_to_string(path);
 
     if code.is_err() {
-        println!("{}: File error: {}", path, code.unwrap_err());
+        println!("{}: File error: {}", path, unsafe { code.unwrap_err_unchecked() });
         return false;
     }
 
-    let parse_result = parse(&code.unwrap());
+    let parse_result = parse(&unsafe { code.unwrap_unchecked() });
 
     if parse_result.is_err() {
         let error = unsafe { parse_result.unwrap_err_unchecked() };

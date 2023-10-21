@@ -114,7 +114,7 @@ native_function!(input, line, column, _scope, args, {
         return Err(NativeException::new(line, column, &format!("This function takes 0 arguments, {} given", args.len())));
     }
 
-    io::stdout().flush().unwrap();
+    let _ = io::stdout().flush();
     let buffer: &mut String = &mut String::new();
 
     if io::stdin().read_line(buffer).is_ok() {
@@ -142,9 +142,21 @@ native_function!(fopen, line, column, _scope, args, {
     }
 
     let path = args[0].as_str().text;
-    let cstr = CString::new(path).unwrap();
+    let cstr_res = CString::new(path);
+
+    if cstr_res.is_err() {
+        return Err(NativeException::new(line, column, "Error when creating path string"));
+    }
+
+    let cstr = unsafe { cstr_res.unwrap_unchecked() };
     let str_ptr = cstr.into_raw();
-    let cstr2 = CString::new(args[1].as_str().text).unwrap();
+    let cstr2_res = CString::new(args[1].as_str().text);
+
+    if cstr2_res.is_err() {
+        return Err(NativeException::new(line, column, "Error when creating path string"));
+    }
+
+    let cstr2 = unsafe { cstr2_res.unwrap_unchecked() };
     let str_ptr2 = cstr2.into_raw();
     let file: *mut libc::FILE = unsafe { libc::fopen(str_ptr, str_ptr2) };
     let _ = unsafe { CString::from_raw(str_ptr) };
@@ -207,7 +219,13 @@ native_function!(fwrite, line, column, _scope, args, {
     }
 
     let file: CustomFile = CustomFile::from_custom(custom.as_ref());
-    let cstr = CString::new(args[1].as_str().text).unwrap();
+    let cstr_res = CString::new(args[1].as_str().text);
+
+    if cstr_res.is_err() {
+        return Err(NativeException::new(line, column, "Error when creating path string"));
+    }
+
+    let cstr = unsafe { cstr_res.unwrap_unchecked() };
     let str_ptr = cstr.into_raw();
     unsafe { libc::fwrite(str_ptr as *const c_void, libc::strlen(str_ptr), 1, file.get_file()); }
     let _ = unsafe { CString::from_raw(str_ptr) };
@@ -258,7 +276,7 @@ native_function!(parse_int, line, column, _scope, args, {
         return Err(NativeException::new(line, column, "Invalid number string"));
     }
 
-    Ok(Rc::new(Int::new(parse_result.unwrap())))
+    Ok(Rc::new(Int::new(unsafe { parse_result.unwrap_unchecked() })))
 });
 
 native_function!(lf, line, column, _scope, args, {
@@ -356,7 +374,13 @@ native_function!(if_, line, column, scope, args, {
         return Ok(Rc::new(Void::new()));
     }
 
-    let result = execute_sequence(scope, &args[1].as_func().body.unwrap());
+    let func_body = args[1].as_func().body;
+
+    if func_body.is_none() {
+        return Err(NativeException::new(line, column, "Function, passed to if should be user-defined"));
+    }
+
+    let result = execute_sequence(scope, &unsafe { func_body.unwrap_unchecked() });
 
     if result.is_some() {
         let result2 = unsafe { result.unwrap_unchecked() };
@@ -390,7 +414,13 @@ native_function!(if_else, line, column, scope, args, {
     }
 
     if args[0].as_int().number == 0 {
-        let result = execute_sequence(scope, &args[2].as_func().body.unwrap());
+        let func_body = args[2].as_func().body;
+
+        if func_body.is_none() {
+            return Err(NativeException::new(line, column, "Function, passed to if should be user-defined"));
+        }
+
+        let result = execute_sequence(scope, &unsafe { func_body.unwrap_unchecked() });
 
         if result.is_some() {
             let result2 = unsafe { result.unwrap_unchecked() };
@@ -406,7 +436,13 @@ native_function!(if_else, line, column, scope, args, {
         return Ok(Rc::new(Void::new()));
     }
 
-    let result = execute_sequence(scope, &args[1].as_func().body.unwrap());
+    let func_body = args[1].as_func().body;
+
+    if func_body.is_none() {
+        return Err(NativeException::new(line, column, "Function, passed to if should be user-defined"));
+    }
+
+    let result = execute_sequence(scope, &unsafe { func_body.unwrap_unchecked() });
 
     if result.is_some() {
         let result2 = unsafe { result.unwrap_unchecked() };

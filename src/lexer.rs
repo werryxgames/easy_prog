@@ -206,7 +206,7 @@ pub fn are_tokens_correct(tokens: &Vec<Token>) -> Result<(), LexerError> {
                     return Err(LexerError { line: token.line, column: token.column, description: "Unexpected closing bracket".to_string() });
                 }
                 
-                let open_token = open_token_result.unwrap();
+                let open_token = unsafe { open_token_result.unwrap_unchecked() };
 
                 if open_token.token_type != TokenType::Lparen {
                     return Err(LexerError { line: token.line, column: token.column, description: format!("Unclosed bracket in line {} column {}", open_token.line, open_token.column) });
@@ -219,7 +219,7 @@ pub fn are_tokens_correct(tokens: &Vec<Token>) -> Result<(), LexerError> {
                     return Err(LexerError { line: token.line, column: token.column, description: "Unexpected closing bracket".to_string() });
                 }
                 
-                let open_token = open_token_result.unwrap();
+                let open_token = unsafe { open_token_result.unwrap_unchecked() };
 
                 if open_token.token_type != TokenType::Lbrace {
                     return Err(LexerError { line: token.line, column: token.column, description: format!("Unclosed bracket in line {} column {}", open_token.line, open_token.column) });
@@ -349,7 +349,7 @@ fn _to_tokens(code: &str) -> Result<Vec<Token>, LexerError> {
                 break;
             }
 
-            chr = chr_result.unwrap();
+            chr = unsafe { chr_result.unwrap_unchecked() };
         } else {
             chr = next_char;
             next_char = '\0';
@@ -368,7 +368,7 @@ fn _to_tokens(code: &str) -> Result<Vec<Token>, LexerError> {
                 continue;
             }
 
-            if is_multiline_comment(next_token.content.pop().unwrap(), chr) {
+            if is_multiline_comment(unsafe { next_token.content.pop().unwrap_unchecked() }, chr) {
                 next_token.token_type = TokenType::_CommentBlock;
             } else {
                 next_token.token_type = TokenType::_CommentLine;
@@ -380,7 +380,7 @@ fn _to_tokens(code: &str) -> Result<Vec<Token>, LexerError> {
         }
 
         if next_token.token_type == TokenType::_CommentLine {
-            if is_comment_end(next_token.content.pop().unwrap(), chr, false) {
+            if is_comment_end(unsafe { next_token.content.pop().unwrap_unchecked() }, chr, false) {
                 next_token.token_type = TokenType::Unknown;
                 next_token.content.clear();
             } else {
@@ -391,7 +391,7 @@ fn _to_tokens(code: &str) -> Result<Vec<Token>, LexerError> {
         }
 
         if next_token.token_type == TokenType::_CommentBlock {
-            if is_comment_end(next_token.content.pop().unwrap(), chr, true) {
+            if is_comment_end(unsafe { next_token.content.pop().unwrap_unchecked() }, chr, true) {
                 next_token.token_type = TokenType::Unknown;
                 next_token.content.clear();
             } else {

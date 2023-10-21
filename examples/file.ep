@@ -6,4 +6,3 @@ fclose(file),
 set("file", fopen("hi", "r")),
 print("File content: '", fread(file), "'", lf()),
 fclose(file)
-
