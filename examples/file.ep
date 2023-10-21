@@ -1,5 +1,9 @@
 set("file", fopen("hi", "w")),
 fwrite(file, "Hello, World!"),
+fwrite(file, "Hi"),
+fwrite(file, lf()),
+fclose(file),
+set("file", fopen("hi", "r")),
 print("File content: '", fread(file), "'", lf()),
 fclose(file)
 

@@ -29,7 +29,7 @@ pub trait Variant {
     fn as_int(&self) -> Int;
     fn as_str(&self) -> Str;
     fn as_func(&self) -> Function;
-    fn as_custom(&self) -> Custom;
+    fn as_custom(&self) -> Rc<dyn Custom>;
     fn print(&self, f: &mut Formatter<'_>) -> std::fmt::Result;
     fn equals(&self, other: &dyn Variant) -> bool;
 }
@@ -74,7 +74,7 @@ impl Variant for Int {
         unimplemented!()
     }
 
-    fn as_custom(&self) -> Custom {
+    fn as_custom(&self) -> Rc<dyn Custom> {
         unimplemented!()
     }
 
@@ -115,7 +115,7 @@ impl Variant for Str {
         unimplemented!()
     }
 
-    fn as_custom(&self) -> Custom {
+    fn as_custom(&self) -> Rc<dyn Custom> {
         unimplemented!()
     }
 
@@ -132,19 +132,20 @@ impl Variant for Str {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
-pub struct Custom {
-    pub id: u64,
-    pub ptr: *mut ()
-}
+pub trait Custom {
+    fn get_id(&self) -> usize;
+    fn custom_equals(&self, custom: &mut Rc<dyn Custom>) -> bool;
 
-impl Custom {
-    pub fn new(id: u64, ptr: *mut ()) -> Custom {
-        Custom { id, ptr }
+    fn repr(&self) -> Option<String> {
+        None
+    }
+
+    fn get_ptr(&self) -> *mut () {
+        self as *const Self as *mut ()
     }
 }
 
-impl Variant for Custom {
+impl Variant for Rc<dyn Custom> {
     fn get_type(&self) -> Type {
         Type::Custom
     }
@@ -161,12 +162,18 @@ impl Variant for Custom {
         unimplemented!()
     }
 
-    fn as_custom(&self) -> Custom {
-        *self
+    fn as_custom(&self) -> Rc<dyn Custom> {
+        self.to_owned()
     }
 
     fn print(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.write_fmt(format_args!("Custom({}, {:?})", self.id, self.ptr))
+        let repr = self.repr();
+
+        if repr.is_some() {
+            f.write_fmt(format_args!("Custom({}, {:?})", self.get_id(), unsafe { repr.unwrap_unchecked() }))
+        } else {
+            f.write_fmt(format_args!("Custom({})", self.get_id()))
+        }
     }
 
     fn equals(&self, other: &dyn Variant) -> bool {
@@ -174,9 +181,9 @@ impl Variant for Custom {
             return false;
         }
 
-        let other_var = other.as_custom();
+        let other_var = &mut other.as_custom();
 
-        self.id == other_var.id && self.ptr == other_var.ptr
+        self.get_id() == other_var.get_id() && self.custom_equals(other_var)
     }
 }
 
@@ -206,7 +213,7 @@ impl Variant for Void {
         unimplemented!()
     }
 
-    fn as_custom(&self) -> Custom {
+    fn as_custom(&self) -> Rc<dyn Custom> {
         unimplemented!()
     }
 
@@ -293,7 +300,7 @@ impl Variant for Function {
         self.to_owned()
     }
 
-    fn as_custom(&self) -> Custom {
+    fn as_custom(&self) -> Rc<dyn Custom> {
         unimplemented!()
     }
 
@@ -629,12 +636,13 @@ impl NativeException {
 pub struct Scope {
     pub variables: HashMap<String, Rc<dyn Variant>>,
     pub functions: HashMap<String, Function>,
-    pub parent_scope: Option<*const Scope>
+    pub parent_scope: Option<*const Scope>,
+    pub destructors: Vec<fn(&mut Scope)>
 }
 
 impl Scope {
     pub fn new(variables: HashMap<String, Rc<dyn Variant>>, functions: HashMap<String, Function>, parent: Option<*const Scope>) -> Scope {
-        Scope { variables, functions, parent_scope: parent }
+        Scope { variables, functions, parent_scope: parent, destructors: Vec::new() }
     }
 
     pub fn empty() -> Scope {
@@ -696,4 +704,17 @@ impl Scope {
     pub fn set_function(&mut self, name: &str, func: Function) -> Option<Function> {
         self.functions.insert(name.to_string(), func)
     }
+
+    pub fn add_destructor(&mut self, destructor: fn(&mut Scope)) {
+        self.destructors.push(destructor)
+    }
 }
+
+impl Drop for Scope {
+    fn drop(&mut self) {
+        for destructor in self.destructors.clone() {
+            destructor(self);
+        }
+    }
+}
+

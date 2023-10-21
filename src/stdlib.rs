@@ -1,7 +1,7 @@
-use std::{io::{self, Read, Write}, fs::{self, File}, process, mem::ManuallyDrop};
+use std::{io::{self, Write}, process, ffi::{CStr, CString, c_void}};
 use std::rc::Rc;
 
-use crate::{types::{Type, Scope, Function, Int, Str, NativeException, Custom, Variant, Void, SequenceNode}, runner::execute_sequence};
+use crate::{types::{Type, Scope, Function, Int, Str, NativeException, Custom, Variant, Void, SequenceNode}, runner::{execute_sequence, add_cleanup_destructor}};
 
 macro_rules! native_function {
     ($name: ident, $line: ident, $column: ident, $scope: ident, $args: ident, $body: block) => {
@@ -9,14 +9,44 @@ macro_rules! native_function {
     };
 }
 
-macro_rules! ep_unpack {
-    ($ptr: expr, $as_type: ty) => {
-        unsafe { *($ptr as *mut $as_type) }
-    };
+static CUSTOM_TYPE_FILE: usize = 1;
 
-    ($ptr: expr, $as_type: ty, $with_func: ident) => {
-        unsafe { (*($ptr as *mut $as_type)).$with_func() }
-    };
+struct CustomFile {
+    file: *mut libc::FILE,
+    closed: *mut bool
+}
+
+impl CustomFile {
+    pub fn new(file: *mut libc::FILE) -> Rc<dyn Custom> {
+        Rc::new(CustomFile { file, closed: &mut false }) as Rc<dyn Custom>
+    }
+
+    pub fn from_custom(custom: &dyn Custom) -> CustomFile {
+        unsafe { (custom.get_ptr() as *mut CustomFile).read() }
+    }
+
+    pub fn get_file(&self) -> *mut libc::FILE {
+        self.file
+    }
+
+    pub fn close(&mut self) {
+        unsafe { self.closed.write(true) };
+        //unsafe { self.ptr.write(*state) };
+    }
+
+    pub fn is_closed(&self) -> bool {
+        unsafe { self.closed.read() }
+    }
+}
+
+impl Custom for CustomFile {
+    fn get_id(&self) -> usize {
+        CUSTOM_TYPE_FILE
+    }
+
+    fn custom_equals(&self, custom: &mut Rc<dyn Custom>) -> bool {
+        self.file == CustomFile::from_custom(custom.as_ref()).file
+    }
 }
 
 native_function!(print, _line, _column, _scope, args, {
@@ -28,7 +58,13 @@ native_function!(print, _line, _column, _scope, args, {
             Type::Func => { print!("<function at address {:#}>", &arg.as_func() as *const Function as u64) },
             Type::Custom => {
                 let node = arg.as_custom();
-                print!("<custom type {} at address {:#}>", node.id, node.ptr as u64);
+                let repr = node.repr();
+
+                if repr.is_some() {
+                    print!("<custom type {}: {:?}>", node.get_id(), unsafe { repr.unwrap_unchecked() });
+                } else {
+                    print!("<custom type {}>", node.get_id());
+                }
             }
         }
     }
@@ -59,7 +95,13 @@ native_function!(printerr, _line, _column, _scope, args, {
             Type::Func => { eprint!("<function at address {:#}>", &arg.as_func() as *const Function as u64) },
             Type::Custom => {
                 let node = arg.as_custom();
-                eprint!("<custom type {} at address {:#}>", node.id, node.ptr as u64);
+                let repr = node.repr();
+
+                if repr.is_some() {
+                    print!("<custom type {}: {:?}>", node.get_id(), unsafe { repr.unwrap_unchecked() });
+                } else {
+                    print!("<custom type {}>", node.get_id());
+                }
             }
         }
     }
@@ -100,21 +142,14 @@ native_function!(fopen, line, column, _scope, args, {
     }
 
     let path = args[0].as_str().text;
-    let file;
-
-    match args[1].as_str().text.as_str() {
-        "w" => file = fs::File::create(path),
-        "r" => file = fs::File::open(path),
-        _ => { return Err(NativeException::new(line, column, "Unexpected mode. Possible values are `r` and `w`")); }
-    };
-
-    if file.is_err() {
-        return Err(NativeException::new(line, column, "I/O error"));
-    }
-
-    let md_file = &mut ManuallyDrop::new(unsafe { file.unwrap_unchecked() });
-
-    Ok(Rc::new(Custom::new(0, md_file as *mut ManuallyDrop<fs::File> as *mut () )))
+    let cstr = CString::new(path).unwrap();
+    let str_ptr = cstr.into_raw();
+    let cstr2 = CString::new(args[1].as_str().text).unwrap();
+    let str_ptr2 = cstr2.into_raw();
+    let file: *mut libc::FILE = unsafe { libc::fopen(str_ptr, str_ptr2) };
+    let _ = unsafe { CString::from_raw(str_ptr) };
+    let _ = unsafe { CString::from_raw(str_ptr2) };
+    Ok(Rc::new(CustomFile::new(file)))
 });
 
 native_function!(fread, line, column, _scope, args, {
@@ -123,23 +158,33 @@ native_function!(fread, line, column, _scope, args, {
     }
 
     if args[0].get_type() != Type::Custom {
-        return Err(NativeException::new(line, column, "First argument of this function should be `File(path)`"));
+        return Err(NativeException::new(line, column, "First argument of this function should be `File(file)`"));
     }
 
-    let mut buffer: String = "".to_string();
-    let custom: Custom = args[0].as_custom();
+    let custom = args[0].as_custom();
 
-    if custom.id != 0 {
-        return Err(NativeException::new(line, column, "First argument should be `File(path)`"));
+    if custom.get_id() != CUSTOM_TYPE_FILE {
+        return Err(NativeException::new(line, column, "First argument should be `File(file)`"));
     }
 
-    let file_result = ep_unpack!(custom.ptr, fs::File, try_clone).unwrap().read_to_string(&mut buffer);
+    let file: CustomFile = CustomFile::from_custom(custom.as_ref());
+    unsafe { libc::fseek(file.get_file(), 0, libc::SEEK_END) };
+    let file_len = unsafe { libc::ftell(file.get_file()) } as usize;
+    unsafe { libc::rewind(file.get_file()) };
+    let buffer = unsafe { libc::malloc(file_len + 1) };
+    unsafe { libc::fread(buffer, file_len, 1, file.get_file()) };
+    unsafe { (buffer as *mut i8).add(file_len).write(0) };
+    let file_result = unsafe { CStr::from_ptr(buffer as *const i8).to_str() };
 
     if file_result.is_err() {
-        return Err(NativeException::new(line, column, "I/O error"));
+        let error = NativeException::new(line, column, &unsafe { file_result.unwrap_err_unchecked().to_string() });
+        unsafe { libc::free(buffer) };
+        return Err(error);
     }
     
-    Ok(Rc::new(Str::new(&buffer)))
+    let result = Rc::new(Str::new(unsafe { file_result.unwrap_unchecked() }));
+    unsafe { libc::free(buffer) };
+    Ok(result)
 });
 
 native_function!(fwrite, line, column, _scope, args, {
@@ -148,24 +193,29 @@ native_function!(fwrite, line, column, _scope, args, {
     }
 
     if args[0].get_type() != Type::Custom {
-        return Err(NativeException::new(line, column, "First argument of this function should be `File(path)`"));
+        return Err(NativeException::new(line, column, "First argument of this function should be `File(file)`"));
     }
 
     if args[1].get_type() != Type::Str {
         return Err(NativeException::new(line, column, "Second argument of this function should be `Str(data)`"));
     }
 
-    let custom: Custom = args[0].as_custom();
+    let custom = args[0].as_custom();
 
-    if custom.id != 0 {
+    if custom.get_id() != CUSTOM_TYPE_FILE {
         return Err(NativeException::new(line, column, "First argument should be `File(path)`"));
     }
 
-    let file_result = unsafe { (custom.ptr as *mut ManuallyDrop<fs::File>).read() }.write_all(args[1].as_str().text.as_bytes());
+    let file: CustomFile = CustomFile::from_custom(custom.as_ref());
+    let cstr = CString::new(args[1].as_str().text).unwrap();
+    let str_ptr = cstr.into_raw();
+    unsafe { libc::fwrite(str_ptr as *const c_void, libc::strlen(str_ptr), 1, file.get_file()); }
+    let _ = unsafe { CString::from_raw(str_ptr) };
+    /*let file_result = file.file.as_ref().write_all(args[1].as_str().text.as_bytes());
 
     if file_result.is_err() {
         return Err(NativeException::new(line, column, "I/O error"));
-    }
+    }*/
 
     Ok(Rc::new(Void::new()))
 });
@@ -179,14 +229,16 @@ native_function!(fclose, line, column, _scope, args, {
         return Err(NativeException::new(line, column, "First argument of this function should be `File(path)`"));
     }
 
-    let custom: Custom = args[0].as_custom();
+    let custom = args[0].as_custom();
 
-    if custom.id != 0 {
+    if custom.get_id() != CUSTOM_TYPE_FILE {
         return Err(NativeException::new(line, column, "First argument should be `File(path)`"));
     }
 
-    let mut file: ManuallyDrop<File> = unsafe { (custom.ptr as *mut ManuallyDrop<File>).read() };
-    unsafe { ManuallyDrop::<File>::drop(&mut file) };
+    let mut file: CustomFile = CustomFile::from_custom(custom.as_ref());
+    unsafe { libc::fclose(file.get_file()); }
+    file.close();
+    //unsafe { ManuallyDrop::<File>::drop(&mut file.file) };
     Ok(Rc::new(Void::new()))
 });
 
@@ -562,9 +614,30 @@ pub fn add_input(scope: &mut Scope) {
     scope.functions.insert("input".to_string(), func);
 }
 
+pub fn destructor_close_files(scope: &mut Scope) {
+    for variable in scope.variables.iter() {
+        let var = variable.1;
+
+        if var.get_type() == Type::Custom {
+            let custom = var.as_custom();
+            
+            if custom.get_id() == CUSTOM_TYPE_FILE {
+                let mut file: CustomFile = CustomFile::from_custom(custom.as_ref());
+
+                if !file.is_closed() {
+                    println!("Closed unclosed file");
+                    unsafe { libc::fclose(file.get_file()); }
+                    file.close();
+                }
+            }
+        }
+    }
+}
+
 pub fn add_fopen(scope: &mut Scope) {
     let func = Function::new_native(fopen);
     scope.functions.insert("fopen".to_string(), func);
+    add_cleanup_destructor(destructor_close_files);
 }
 
 pub fn add_fread(scope: &mut Scope) {

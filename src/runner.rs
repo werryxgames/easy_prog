@@ -1,4 +1,4 @@
-use std::{rc::Rc, fs, io::Error};
+use std::{rc::Rc, fs, io::Error, sync::Mutex};
 
 use crate::{types::{SequenceNode, NodeType, Scope, CallFuncNode, Variant, Function, NativeException, VariableNode, Void}, parser::parse};
 
@@ -14,6 +14,8 @@ impl RunnerError {
         return RunnerError { line, column, description: description.to_string() };
     }
 }
+
+static DESTRUCTORS: Mutex<Vec<fn(&mut Scope)>> = Mutex::new(Vec::new());
 
 pub fn get_variable(scope: &mut Scope, node: VariableNode) -> Result<&mut Rc<dyn Variant>, RunnerError> {
     if !scope.variables.contains_key(&node.name) {
@@ -103,6 +105,16 @@ pub fn execute_sequence(scope: &mut Scope, node: &SequenceNode) -> Option<Result
     None
 }
 
+pub fn add_cleanup_destructor(destructor: fn(&mut Scope)) {
+    DESTRUCTORS.lock().unwrap().push(destructor);
+}
+
+pub fn cleanup(scope: &mut Scope) {
+    for destructor in DESTRUCTORS.lock().unwrap().iter() {
+        destructor(scope);
+    }
+}
+
 pub fn execute(scope: &mut Scope, ast: &SequenceNode, path: &str) -> bool {
     let exec_result = execute_sequence(&mut *scope, ast);
 
@@ -120,6 +132,7 @@ pub fn execute(scope: &mut Scope, ast: &SequenceNode, path: &str) -> bool {
         return false;
     }
 
+    cleanup(scope);
     true
 }
 

@@ -92,7 +92,7 @@ pub fn start_repl_ex<T: Write>(scope: &mut Scope, out: &mut T) -> ! {
                 },
                 Type::Custom => {
                     let custom = final_result.as_custom();
-                    println!("<Custom id={}, ptr={:#X}>", custom.id, custom.ptr as usize);
+                    println!("<Custom id={}>", custom.get_id());
                 }
             };
 

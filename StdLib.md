@@ -96,6 +96,8 @@ Thrown when failed to open file.
 ##### Notes
 
 Opened file will automatically close in the end of program.
+If you want to close file manually, call `fclose(Custom)`.
+If you don't want to close file in the end, don't assign it to a variable.
 
 #### `Str` fread(`Custom` *file*)
 
@@ -130,6 +132,14 @@ Writes data to *file*.
 ###### I/O error
 
 Thrown when failed to write data to *file*.
+
+#### fclose(`Custom` *file*)
+
+Manually closes specified *file*.
+
+##### Arguments
+
+*file* is a pointer to opened file, returned by `Custom fopen(Str, Str)`;
 
 ## String
 
