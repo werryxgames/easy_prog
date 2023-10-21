@@ -1,11 +1,27 @@
-use std::{io::{self, Write}, process, ffi::{CStr, CString, c_void}};
 use std::rc::Rc;
+use std::{
+    ffi::{c_void, CStr, CString},
+    io::{self, Write},
+    process,
+};
 
-use crate::{types::{Type, Scope, Function, Int, Str, NativeException, Custom, Variant, Void, SequenceNode}, runner::{execute_sequence, add_cleanup_destructor}};
+use crate::{
+    runner::{add_cleanup_destructor, execute_sequence},
+    types::{
+        Custom, Function, Int, NativeException, Scope, SequenceNode, Str, Type, Variant, Void,
+    },
+};
 
 macro_rules! native_function {
     ($name: ident, $line: ident, $column: ident, $scope: ident, $args: ident, $body: block) => {
-        pub fn $name($line: u32, $column: u32, $scope: &mut Scope, $args: Vec<Rc<dyn Variant>>) -> Result<Rc<dyn Variant>, NativeException> { $body }
+        pub fn $name(
+            $line: u32,
+            $column: u32,
+            $scope: &mut Scope,
+            $args: Vec<Rc<dyn Variant>>,
+        ) -> Result<Rc<dyn Variant>, NativeException> {
+            $body
+        }
     };
 }
 
@@ -13,12 +29,15 @@ static CUSTOM_TYPE_FILE: usize = 1;
 
 struct CustomFile {
     file: *mut libc::FILE,
-    closed: *mut bool
+    closed: *mut bool,
 }
 
 impl CustomFile {
-    pub fn new(file: *mut libc::FILE) -> Rc<dyn Custom> {
-        Rc::new(CustomFile { file, closed: &mut false }) as Rc<dyn Custom>
+    pub fn new_rc(file: *mut libc::FILE) -> Rc<dyn Custom> {
+        Rc::new(CustomFile {
+            file,
+            closed: &mut false,
+        }) as Rc<dyn Custom>
     }
 
     pub fn from_custom(custom: &dyn Custom) -> CustomFile {
@@ -52,16 +71,29 @@ impl Custom for CustomFile {
 native_function!(print, _line, _column, _scope, args, {
     for arg in args {
         match arg.get_type() {
-            Type::Int => { print!("{}", arg.as_int().number); },
-            Type::Str => { print!("{}", arg.as_str().text); },
-            Type::Void => { print!("<null>"); },
-            Type::Func => { print!("<function at address {:#}>", &arg.as_func() as *const Function as u64) },
+            Type::Int => {
+                print!("{}", arg.as_int().number);
+            }
+            Type::Str => {
+                print!("{}", arg.as_str().text);
+            }
+            Type::Void => {
+                print!("<null>");
+            }
+            Type::Func => {
+                print!(
+                    "<function at address {:#}>",
+                    &arg.as_func() as *const Function as u64
+                )
+            }
             Type::Custom => {
                 let node = arg.as_custom();
                 let repr = node.repr();
 
                 if repr.is_some() {
-                    print!("<custom type {}: {:?}>", node.get_id(), unsafe { repr.unwrap_unchecked() });
+                    print!("<custom type {}: {:?}>", node.get_id(), unsafe {
+                        repr.unwrap_unchecked()
+                    });
                 } else {
                     print!("<custom type {}>", node.get_id());
                 }
@@ -73,14 +105,18 @@ native_function!(print, _line, _column, _scope, args, {
 });
 
 native_function!(flush_stdout, line, column, _scope, args, {
-    if args.len() != 0 {
-        return Err(NativeException::new(line, column, &format!("This function takes 0 arguments, {} given", args.len())));
+    if !args.is_empty() {
+        return Err(NativeException::new(
+            line,
+            column,
+            &format!("This function takes 0 arguments, {} given", args.len()),
+        ));
     }
 
     let result = io::stdout().flush();
 
     if result.is_err() {
-        return Err(NativeException::new(line, column, &format!("I/O error")));
+        return Err(NativeException::new(line, column, "I/O error"));
     }
 
     Ok(Rc::new(Void::new()))
@@ -89,16 +125,29 @@ native_function!(flush_stdout, line, column, _scope, args, {
 native_function!(printerr, _line, _column, _scope, args, {
     for arg in args {
         match arg.get_type() {
-            Type::Int => { eprint!("{}", arg.as_int().number); },
-            Type::Str => { eprint!("{}", arg.as_str().text); },
-            Type::Void => { eprint!("<null>"); },
-            Type::Func => { eprint!("<function at address {:#}>", &arg.as_func() as *const Function as u64) },
+            Type::Int => {
+                eprint!("{}", arg.as_int().number);
+            }
+            Type::Str => {
+                eprint!("{}", arg.as_str().text);
+            }
+            Type::Void => {
+                eprint!("<null>");
+            }
+            Type::Func => {
+                eprint!(
+                    "<function at address {:#}>",
+                    &arg.as_func() as *const Function as u64
+                )
+            }
             Type::Custom => {
                 let node = arg.as_custom();
                 let repr = node.repr();
 
                 if repr.is_some() {
-                    print!("<custom type {}: {:?}>", node.get_id(), unsafe { repr.unwrap_unchecked() });
+                    print!("<custom type {}: {:?}>", node.get_id(), unsafe {
+                        repr.unwrap_unchecked()
+                    });
                 } else {
                     print!("<custom type {}>", node.get_id());
                 }
@@ -110,15 +159,19 @@ native_function!(printerr, _line, _column, _scope, args, {
 });
 
 native_function!(input, line, column, _scope, args, {
-    if args.len() != 0 {
-        return Err(NativeException::new(line, column, &format!("This function takes 0 arguments, {} given", args.len())));
+    if !args.is_empty() {
+        return Err(NativeException::new(
+            line,
+            column,
+            &format!("This function takes 0 arguments, {} given", args.len()),
+        ));
     }
 
     let _ = io::stdout().flush();
     let buffer: &mut String = &mut String::new();
 
     if io::stdin().read_line(buffer).is_ok() {
-        if buffer.ends_with("\n") {
+        if buffer.ends_with('\n') {
             return Ok(Rc::new(Str::new(&buffer[..buffer.len() - 1])));
         }
 
@@ -130,22 +183,38 @@ native_function!(input, line, column, _scope, args, {
 
 native_function!(fopen, line, column, _scope, args, {
     if args.len() != 2 {
-        return Err(NativeException::new(line, column, &format!("This function takes 2 arguments, {} given", args.len())));
+        return Err(NativeException::new(
+            line,
+            column,
+            &format!("This function takes 2 arguments, {} given", args.len()),
+        ));
     }
 
     if args[0].get_type() != Type::Str {
-        return Err(NativeException::new(line, column, "First argument of this function should be `Str(path)`"));
+        return Err(NativeException::new(
+            line,
+            column,
+            "First argument of this function should be `Str(path)`",
+        ));
     }
 
     if args[1].get_type() != Type::Str {
-        return Err(NativeException::new(line, column, "Second argument of this function should be `Str(mode)`"));
+        return Err(NativeException::new(
+            line,
+            column,
+            "Second argument of this function should be `Str(mode)`",
+        ));
     }
 
     let path = args[0].as_str().text;
     let cstr_res = CString::new(path);
 
     if cstr_res.is_err() {
-        return Err(NativeException::new(line, column, "Error when creating path string"));
+        return Err(NativeException::new(
+            line,
+            column,
+            "Error when creating path string",
+        ));
     }
 
     let cstr = unsafe { cstr_res.unwrap_unchecked() };
@@ -153,7 +222,11 @@ native_function!(fopen, line, column, _scope, args, {
     let cstr2_res = CString::new(args[1].as_str().text);
 
     if cstr2_res.is_err() {
-        return Err(NativeException::new(line, column, "Error when creating path string"));
+        return Err(NativeException::new(
+            line,
+            column,
+            "Error when creating path string",
+        ));
     }
 
     let cstr2 = unsafe { cstr2_res.unwrap_unchecked() };
@@ -161,22 +234,34 @@ native_function!(fopen, line, column, _scope, args, {
     let file: *mut libc::FILE = unsafe { libc::fopen(str_ptr, str_ptr2) };
     let _ = unsafe { CString::from_raw(str_ptr) };
     let _ = unsafe { CString::from_raw(str_ptr2) };
-    Ok(Rc::new(CustomFile::new(file)))
+    Ok(Rc::new(CustomFile::new_rc(file)))
 });
 
 native_function!(fread, line, column, _scope, args, {
     if args.len() != 1 {
-        return Err(NativeException::new(line, column, &format!("This function takes 1 argument, {} given", args.len())));
+        return Err(NativeException::new(
+            line,
+            column,
+            &format!("This function takes 1 argument, {} given", args.len()),
+        ));
     }
 
     if args[0].get_type() != Type::Custom {
-        return Err(NativeException::new(line, column, "First argument of this function should be `File(file)`"));
+        return Err(NativeException::new(
+            line,
+            column,
+            "First argument of this function should be `File(file)`",
+        ));
     }
 
     let custom = args[0].as_custom();
 
     if custom.get_id() != CUSTOM_TYPE_FILE {
-        return Err(NativeException::new(line, column, "First argument should be `File(file)`"));
+        return Err(NativeException::new(
+            line,
+            column,
+            "First argument should be `File(file)`",
+        ));
     }
 
     let file: CustomFile = CustomFile::from_custom(custom.as_ref());
@@ -189,11 +274,13 @@ native_function!(fread, line, column, _scope, args, {
     let file_result = unsafe { CStr::from_ptr(buffer as *const i8).to_str() };
 
     if file_result.is_err() {
-        let error = NativeException::new(line, column, &unsafe { file_result.unwrap_err_unchecked().to_string() });
+        let error = NativeException::new(line, column, &unsafe {
+            file_result.unwrap_err_unchecked().to_string()
+        });
         unsafe { libc::free(buffer) };
         return Err(error);
     }
-    
+
     let result = Rc::new(Str::new(unsafe { file_result.unwrap_unchecked() }));
     unsafe { libc::free(buffer) };
     Ok(result)
@@ -201,33 +288,60 @@ native_function!(fread, line, column, _scope, args, {
 
 native_function!(fwrite, line, column, _scope, args, {
     if args.len() != 2 {
-        return Err(NativeException::new(line, column, &format!("This function takes 2 arguments, {} given", args.len())));
+        return Err(NativeException::new(
+            line,
+            column,
+            &format!("This function takes 2 arguments, {} given", args.len()),
+        ));
     }
 
     if args[0].get_type() != Type::Custom {
-        return Err(NativeException::new(line, column, "First argument of this function should be `File(file)`"));
+        return Err(NativeException::new(
+            line,
+            column,
+            "First argument of this function should be `File(file)`",
+        ));
     }
 
     if args[1].get_type() != Type::Str {
-        return Err(NativeException::new(line, column, "Second argument of this function should be `Str(data)`"));
+        return Err(NativeException::new(
+            line,
+            column,
+            "Second argument of this function should be `Str(data)`",
+        ));
     }
 
     let custom = args[0].as_custom();
 
     if custom.get_id() != CUSTOM_TYPE_FILE {
-        return Err(NativeException::new(line, column, "First argument should be `File(path)`"));
+        return Err(NativeException::new(
+            line,
+            column,
+            "First argument should be `File(path)`",
+        ));
     }
 
     let file: CustomFile = CustomFile::from_custom(custom.as_ref());
     let cstr_res = CString::new(args[1].as_str().text);
 
     if cstr_res.is_err() {
-        return Err(NativeException::new(line, column, "Error when creating path string"));
+        return Err(NativeException::new(
+            line,
+            column,
+            "Error when creating path string",
+        ));
     }
 
     let cstr = unsafe { cstr_res.unwrap_unchecked() };
     let str_ptr = cstr.into_raw();
-    unsafe { libc::fwrite(str_ptr as *const c_void, libc::strlen(str_ptr), 1, file.get_file()); }
+    unsafe {
+        libc::fwrite(
+            str_ptr as *const c_void,
+            libc::strlen(str_ptr),
+            1,
+            file.get_file(),
+        );
+    }
     let _ = unsafe { CString::from_raw(str_ptr) };
     /*let file_result = file.file.as_ref().write_all(args[1].as_str().text.as_bytes());
 
@@ -240,21 +354,35 @@ native_function!(fwrite, line, column, _scope, args, {
 
 native_function!(fclose, line, column, _scope, args, {
     if args.len() != 1 {
-        return Err(NativeException::new(line, column, &format!("This function takes 1 argument, {} given", args.len())));
+        return Err(NativeException::new(
+            line,
+            column,
+            &format!("This function takes 1 argument, {} given", args.len()),
+        ));
     }
 
     if args[0].get_type() != Type::Custom {
-        return Err(NativeException::new(line, column, "First argument of this function should be `File(path)`"));
+        return Err(NativeException::new(
+            line,
+            column,
+            "First argument of this function should be `File(path)`",
+        ));
     }
 
     let custom = args[0].as_custom();
 
     if custom.get_id() != CUSTOM_TYPE_FILE {
-        return Err(NativeException::new(line, column, "First argument should be `File(path)`"));
+        return Err(NativeException::new(
+            line,
+            column,
+            "First argument should be `File(path)`",
+        ));
     }
 
     let mut file: CustomFile = CustomFile::from_custom(custom.as_ref());
-    unsafe { libc::fclose(file.get_file()); }
+    unsafe {
+        libc::fclose(file.get_file());
+    }
     file.close();
     //unsafe { ManuallyDrop::<File>::drop(&mut file.file) };
     Ok(Rc::new(Void::new()))
@@ -262,11 +390,19 @@ native_function!(fclose, line, column, _scope, args, {
 
 native_function!(parse_int, line, column, _scope, args, {
     if args.len() != 1 {
-        return Err(NativeException::new(line, column, &format!("This function takes 1 argument, {} given", args.len())));
+        return Err(NativeException::new(
+            line,
+            column,
+            &format!("This function takes 1 argument, {} given", args.len()),
+        ));
     }
 
     if args[0].get_type() != Type::Str {
-        return Err(NativeException::new(line, column, "First argument of this function should be `Str(number)`"));
+        return Err(NativeException::new(
+            line,
+            column,
+            "First argument of this function should be `Str(number)`",
+        ));
     }
 
     let integer = args[0].as_str().text;
@@ -276,20 +412,30 @@ native_function!(parse_int, line, column, _scope, args, {
         return Err(NativeException::new(line, column, "Invalid number string"));
     }
 
-    Ok(Rc::new(Int::new(unsafe { parse_result.unwrap_unchecked() })))
+    Ok(Rc::new(Int::new(unsafe {
+        parse_result.unwrap_unchecked()
+    })))
 });
 
 native_function!(lf, line, column, _scope, args, {
-    if args.len() != 0 {
-        return Err(NativeException::new(line, column, &format!("This function takes 0 arguments, {} given", args.len())));
+    if !args.is_empty() {
+        return Err(NativeException::new(
+            line,
+            column,
+            &format!("This function takes 0 arguments, {} given", args.len()),
+        ));
     }
 
     Ok(Rc::new(Str::new("\n")))
 });
 
 native_function!(cr, line, column, _scope, args, {
-    if args.len() != 0 {
-        return Err(NativeException::new(line, column, &format!("This function takes 0 arguments, {} given", args.len())));
+    if !args.is_empty() {
+        return Err(NativeException::new(
+            line,
+            column,
+            &format!("This function takes 0 arguments, {} given", args.len()),
+        ));
     }
 
     Ok(Rc::new(Str::new("\r")))
@@ -297,48 +443,84 @@ native_function!(cr, line, column, _scope, args, {
 
 native_function!(declfunc, line, column, scope, args, {
     if args.len() != 2 {
-        return Err(NativeException::new(line, column, &format!("This function takes 2 arguments, {} given", args.len())));
+        return Err(NativeException::new(
+            line,
+            column,
+            &format!("This function takes 2 arguments, {} given", args.len()),
+        ));
     }
 
     if args[0].get_type() != Type::Str {
-        return Err(NativeException::new(line, column, "First argument of this function should be `Str(name)`"));
+        return Err(NativeException::new(
+            line,
+            column,
+            "First argument of this function should be `Str(name)`",
+        ));
     }
 
     if args[1].get_type() != Type::Func {
-        return Err(NativeException::new(line, column, "Second argument of this function should be `Func(body)`"));
+        return Err(NativeException::new(
+            line,
+            column,
+            "Second argument of this function should be `Func(body)`",
+        ));
     }
 
-    scope.functions.insert(args[0].as_str().text, args[1].as_func());
+    scope
+        .functions
+        .insert(args[0].as_str().text, args[1].as_func());
     Ok(Rc::new(Void::new()))
 });
 
 native_function!(set, line, column, scope, args, {
     if args.len() != 2 {
-        return Err(NativeException::new(line, column, &format!("This function takes 2 arguments, {} given", args.len())));
+        return Err(NativeException::new(
+            line,
+            column,
+            &format!("This function takes 2 arguments, {} given", args.len()),
+        ));
     }
 
     if args[0].get_type() != Type::Str {
-        return Err(NativeException::new(line, column, "First argument of this function should be `Str(name)`"));
+        return Err(NativeException::new(
+            line,
+            column,
+            "First argument of this function should be `Str(name)`",
+        ));
     }
 
-    scope.variables.insert(args[0].as_str().text, args[1].clone());
+    scope
+        .variables
+        .insert(args[0].as_str().text, args[1].clone());
     Ok(Rc::new(Void::new()))
 });
 
 native_function!(null, line, column, scope, args, {
     if args.len() != 1 {
-        return Err(NativeException::new(line, column, &format!("This function takes 1 argument, {} given", args.len())));
+        return Err(NativeException::new(
+            line,
+            column,
+            &format!("This function takes 1 argument, {} given", args.len()),
+        ));
     }
 
     if args[0].get_type() != Type::Str {
-        return Err(NativeException::new(line, column, "First argument of this function should be `Str(name)`"));
+        return Err(NativeException::new(
+            line,
+            column,
+            "First argument of this function should be `Str(name)`",
+        ));
     }
 
     let var_name = args[0].as_str().text;
     let var_result = scope.variables.get(&var_name);
 
     if var_result.is_none() {
-        return Err(NativeException::new(line, column, &format!("Variable '{}' isn't found in the current scope", var_name)));
+        return Err(NativeException::new(
+            line,
+            column,
+            &format!("Variable '{}' isn't found in the current scope", var_name),
+        ));
     }
 
     let var = unsafe { var_result.unwrap_unchecked() };
@@ -349,9 +531,16 @@ native_function!(null, line, column, scope, args, {
     } else if var_type == Type::Str {
         scope.variables.insert(var_name, Rc::new(Str::new("")));
     } else if var_type == Type::Func {
-        scope.variables.insert(var_name, Rc::new(Function::new(SequenceNode::new(line, column, Vec::new()))));
+        scope.variables.insert(
+            var_name,
+            Rc::new(Function::new(SequenceNode::new(line, column, Vec::new()))),
+        );
     } else if var_type == Type::Custom {
-        return Err(NativeException::new(line, column, "Reset custom error: Function null() is unavailable for custom types"));
+        return Err(NativeException::new(
+            line,
+            column,
+            "Reset custom error: Function null() is unavailable for custom types",
+        ));
     }
 
     Ok(Rc::new(Void::new()))
@@ -359,15 +548,27 @@ native_function!(null, line, column, scope, args, {
 
 native_function!(if_, line, column, scope, args, {
     if args.len() != 2 {
-        return Err(NativeException::new(line, column, &format!("This function takes 2 arguments, {} given", args.len())));
+        return Err(NativeException::new(
+            line,
+            column,
+            &format!("This function takes 2 arguments, {} given", args.len()),
+        ));
     }
 
     if args[0].get_type() != Type::Int {
-        return Err(NativeException::new(line, column, "First argument of this function should be `Int(condition)`"));
+        return Err(NativeException::new(
+            line,
+            column,
+            "First argument of this function should be `Int(condition)`",
+        ));
     }
 
     if args[1].get_type() != Type::Func {
-        return Err(NativeException::new(line, column, "Second argument of this function should be `Func(body)`"));
+        return Err(NativeException::new(
+            line,
+            column,
+            "Second argument of this function should be `Func(body)`",
+        ));
     }
 
     if args[0].as_int().number == 0 {
@@ -377,7 +578,11 @@ native_function!(if_, line, column, scope, args, {
     let func_body = args[1].as_func().body;
 
     if func_body.is_none() {
-        return Err(NativeException::new(line, column, "Function, passed to if should be user-defined"));
+        return Err(NativeException::new(
+            line,
+            column,
+            "Function, passed to if should be user-defined",
+        ));
     }
 
     let result = execute_sequence(scope, &unsafe { func_body.unwrap_unchecked() });
@@ -387,7 +592,11 @@ native_function!(if_, line, column, scope, args, {
 
         if result2.is_ok() {
             let error = unsafe { result2.unwrap_unchecked() };
-            return Err(NativeException::new(error.line, error.column, &error.description));
+            return Err(NativeException::new(
+                error.line,
+                error.column,
+                &error.description,
+            ));
         } else {
             return unsafe { Err(result2.unwrap_err_unchecked()) };
         }
@@ -398,26 +607,46 @@ native_function!(if_, line, column, scope, args, {
 
 native_function!(if_else, line, column, scope, args, {
     if args.len() != 3 {
-        return Err(NativeException::new(line, column, &format!("This function takes 3 arguments, {} given", args.len())));
+        return Err(NativeException::new(
+            line,
+            column,
+            &format!("This function takes 3 arguments, {} given", args.len()),
+        ));
     }
 
     if args[0].get_type() != Type::Int {
-        return Err(NativeException::new(line, column, "First argument of this function should be `Int(condition)`"));
+        return Err(NativeException::new(
+            line,
+            column,
+            "First argument of this function should be `Int(condition)`",
+        ));
     }
 
     if args[1].get_type() != Type::Func {
-        return Err(NativeException::new(line, column, "Second argument of this function should be `Func(if_branch)`"));
+        return Err(NativeException::new(
+            line,
+            column,
+            "Second argument of this function should be `Func(if_branch)`",
+        ));
     }
 
     if args[2].get_type() != Type::Func {
-        return Err(NativeException::new(line, column, "Third argument of this function should be `Func(else_branch)`"));
+        return Err(NativeException::new(
+            line,
+            column,
+            "Third argument of this function should be `Func(else_branch)`",
+        ));
     }
 
     if args[0].as_int().number == 0 {
         let func_body = args[2].as_func().body;
 
         if func_body.is_none() {
-            return Err(NativeException::new(line, column, "Function, passed to if should be user-defined"));
+            return Err(NativeException::new(
+                line,
+                column,
+                "Function, passed to if should be user-defined",
+            ));
         }
 
         let result = execute_sequence(scope, &unsafe { func_body.unwrap_unchecked() });
@@ -427,7 +656,11 @@ native_function!(if_else, line, column, scope, args, {
 
             if result2.is_ok() {
                 let error = unsafe { result2.unwrap_unchecked() };
-                return Err(NativeException::new(error.line, error.column, &error.description));
+                return Err(NativeException::new(
+                    error.line,
+                    error.column,
+                    &error.description,
+                ));
             } else {
                 return unsafe { Err(result2.unwrap_err_unchecked()) };
             }
@@ -439,7 +672,11 @@ native_function!(if_else, line, column, scope, args, {
     let func_body = args[1].as_func().body;
 
     if func_body.is_none() {
-        return Err(NativeException::new(line, column, "Function, passed to if should be user-defined"));
+        return Err(NativeException::new(
+            line,
+            column,
+            "Function, passed to if should be user-defined",
+        ));
     }
 
     let result = execute_sequence(scope, &unsafe { func_body.unwrap_unchecked() });
@@ -449,7 +686,11 @@ native_function!(if_else, line, column, scope, args, {
 
         if result2.is_ok() {
             let error = unsafe { result2.unwrap_unchecked() };
-            return Err(NativeException::new(error.line, error.column, &error.description));
+            return Err(NativeException::new(
+                error.line,
+                error.column,
+                &error.description,
+            ));
         } else {
             return unsafe { Err(result2.unwrap_err_unchecked()) };
         }
@@ -460,63 +701,126 @@ native_function!(if_else, line, column, scope, args, {
 
 native_function!(add, line, column, _scope, args, {
     if args.len() != 2 {
-        return Err(NativeException::new(line, column, &format!("This function takes 2 arguments, {} given", args.len())));
+        return Err(NativeException::new(
+            line,
+            column,
+            &format!("This function takes 2 arguments, {} given", args.len()),
+        ));
     }
 
     if args[0].get_type() != Type::Int {
-        return Err(NativeException::new(line, column, "First argument of this function should be `Int(a)`"));
+        return Err(NativeException::new(
+            line,
+            column,
+            "First argument of this function should be `Int(a)`",
+        ));
     }
 
     if args[1].get_type() != Type::Int {
-        return Err(NativeException::new(line, column, "Second argument of this function should be `Int(b)`"));
+        return Err(NativeException::new(
+            line,
+            column,
+            "Second argument of this function should be `Int(b)`",
+        ));
     }
 
-    Ok(Rc::new(Int::new(args[0].as_int().number.wrapping_add(args[1].as_int().number))))
+    Ok(Rc::new(Int::new(
+        args[0]
+            .as_int()
+            .number
+            .wrapping_add(args[1].as_int().number),
+    )))
 });
 
 native_function!(subt, line, column, _scope, args, {
     if args.len() != 2 {
-        return Err(NativeException::new(line, column, &format!("This function takes 2 arguments, {} given", args.len())));
+        return Err(NativeException::new(
+            line,
+            column,
+            &format!("This function takes 2 arguments, {} given", args.len()),
+        ));
     }
 
     if args[0].get_type() != Type::Int {
-        return Err(NativeException::new(line, column, "First argument of this function should be `Int(a)`"));
+        return Err(NativeException::new(
+            line,
+            column,
+            "First argument of this function should be `Int(a)`",
+        ));
     }
 
     if args[1].get_type() != Type::Int {
-        return Err(NativeException::new(line, column, "Second argument of this function should be `Int(b)`"));
+        return Err(NativeException::new(
+            line,
+            column,
+            "Second argument of this function should be `Int(b)`",
+        ));
     }
 
-    Ok(Rc::new(Int::new(args[0].as_int().number.wrapping_sub(args[1].as_int().number))))
+    Ok(Rc::new(Int::new(
+        args[0]
+            .as_int()
+            .number
+            .wrapping_sub(args[1].as_int().number),
+    )))
 });
 
 native_function!(mult, line, column, _scope, args, {
     if args.len() != 2 {
-        return Err(NativeException::new(line, column, &format!("This function takes 2 arguments, {} given", args.len())));
+        return Err(NativeException::new(
+            line,
+            column,
+            &format!("This function takes 2 arguments, {} given", args.len()),
+        ));
     }
 
     if args[0].get_type() != Type::Int {
-        return Err(NativeException::new(line, column, "First argument of this function should be `Int(a)`"));
+        return Err(NativeException::new(
+            line,
+            column,
+            "First argument of this function should be `Int(a)`",
+        ));
     }
 
     if args[1].get_type() != Type::Int {
-        return Err(NativeException::new(line, column, "Second argument of this function should be `Int(b)`"));
+        return Err(NativeException::new(
+            line,
+            column,
+            "Second argument of this function should be `Int(b)`",
+        ));
     }
 
-    Ok(Rc::new(Int::new(args[0].as_int().number.wrapping_mul(args[1].as_int().number))))
+    Ok(Rc::new(Int::new(
+        args[0]
+            .as_int()
+            .number
+            .wrapping_mul(args[1].as_int().number),
+    )))
 });
 
 native_function!(idiv, line, column, _scope, args, {
     if args.len() != 2 {
-        return Err(NativeException::new(line, column, &format!("This function takes 2 arguments, {} given", args.len())));
+        return Err(NativeException::new(
+            line,
+            column,
+            &format!("This function takes 2 arguments, {} given", args.len()),
+        ));
     }
 
     if args[0].get_type() != Type::Int {
-        return Err(NativeException::new(line, column, "First argument of this function should be `Int(a)`"));
+        return Err(NativeException::new(
+            line,
+            column,
+            "First argument of this function should be `Int(a)`",
+        ));
     }
 
     if args[1].get_type() != Type::Int {
-        return Err(NativeException::new(line, column, "Second argument of this function should be `Int(b)`"));
+        return Err(NativeException::new(
+            line,
+            column,
+            "Second argument of this function should be `Int(b)`",
+        ));
     }
 
     let b = args[1].as_int().number;
@@ -530,39 +834,71 @@ native_function!(idiv, line, column, _scope, args, {
 
 native_function!(and, line, column, _scope, args, {
     if args.len() != 2 {
-        return Err(NativeException::new(line, column, &format!("This function takes 2 arguments, {} given", args.len())));
+        return Err(NativeException::new(
+            line,
+            column,
+            &format!("This function takes 2 arguments, {} given", args.len()),
+        ));
     }
 
     if args[0].get_type() != Type::Int {
-        return Err(NativeException::new(line, column, "First argument of this function should be `Int(a)`"));
+        return Err(NativeException::new(
+            line,
+            column,
+            "First argument of this function should be `Int(a)`",
+        ));
     }
 
     if args[1].get_type() != Type::Int {
-        return Err(NativeException::new(line, column, "Second argument of this function should be `Int(b)`"));
+        return Err(NativeException::new(
+            line,
+            column,
+            "Second argument of this function should be `Int(b)`",
+        ));
     }
 
-    Ok(Rc::new(Int::new((args[0].as_int().number != 0 && args[1].as_int().number != 0) as i64)))
+    Ok(Rc::new(Int::new(
+        (args[0].as_int().number != 0 && args[1].as_int().number != 0) as i64,
+    )))
 });
 
 native_function!(or, line, column, _scope, args, {
     if args.len() != 2 {
-        return Err(NativeException::new(line, column, &format!("This function takes 2 arguments, {} given", args.len())));
+        return Err(NativeException::new(
+            line,
+            column,
+            &format!("This function takes 2 arguments, {} given", args.len()),
+        ));
     }
 
     if args[0].get_type() != Type::Int {
-        return Err(NativeException::new(line, column, "First argument of this function should be `Int(a)`"));
+        return Err(NativeException::new(
+            line,
+            column,
+            "First argument of this function should be `Int(a)`",
+        ));
     }
 
     if args[1].get_type() != Type::Int {
-        return Err(NativeException::new(line, column, "Second argument of this function should be `Int(b)`"));
+        return Err(NativeException::new(
+            line,
+            column,
+            "Second argument of this function should be `Int(b)`",
+        ));
     }
 
-    Ok(Rc::new(Int::new((args[0].as_int().number != 0 || args[1].as_int().number != 0) as i64)))
+    Ok(Rc::new(Int::new(
+        (args[0].as_int().number != 0 || args[1].as_int().number != 0) as i64,
+    )))
 });
 
 native_function!(eq, line, column, _scope, args, {
     if args.len() != 2 {
-        return Err(NativeException::new(line, column, &format!("This function takes 2 arguments, {} given", args.len())));
+        return Err(NativeException::new(
+            line,
+            column,
+            &format!("This function takes 2 arguments, {} given", args.len()),
+        ));
     }
 
     let a = &args[0];
@@ -578,7 +914,11 @@ native_function!(eq, line, column, _scope, args, {
 
 native_function!(neq, line, column, _scope, args, {
     if args.len() != 2 {
-        return Err(NativeException::new(line, column, &format!("This function takes 2 arguments, {} given", args.len())));
+        return Err(NativeException::new(
+            line,
+            column,
+            &format!("This function takes 2 arguments, {} given", args.len()),
+        ));
     }
 
     let a = &args[0];
@@ -600,20 +940,35 @@ native_function!(exit, line, column, _scope, args, {
         exit_code = 0i32;
     } else if args_len == 1 {
         if args[0].get_type() != Type::Int {
-            return Err(NativeException::new(line, column, &format!("First argument of this function should be `Int(code)`")));
+            return Err(NativeException::new(
+                line,
+                column,
+                "First argument of this function should be `Int(code)`",
+            ));
         }
 
         exit_code = args[0].as_int().number as i32;
     } else {
-        return Err(NativeException::new(line, column, &format!("This function takes at most 1 argument, {} given", args.len())));
+        return Err(NativeException::new(
+            line,
+            column,
+            &format!(
+                "This function takes at most 1 argument, {} given",
+                args.len()
+            ),
+        ));
     }
 
     process::exit(exit_code)
 });
 
 native_function!(inspect_scope, line, column, scope, args, {
-    if args.len() != 0 {
-        return Err(NativeException::new(line, column, &format!("This function takes 0 arguments, {} given", args.len())));
+    if !args.is_empty() {
+        return Err(NativeException::new(
+            line,
+            column,
+            &format!("This function takes 0 arguments, {} given", args.len()),
+        ));
     }
 
     println!("Begin of inspection");
@@ -656,13 +1011,15 @@ pub fn destructor_close_files(scope: &mut Scope) {
 
         if var.get_type() == Type::Custom {
             let custom = var.as_custom();
-            
+
             if custom.get_id() == CUSTOM_TYPE_FILE {
                 let mut file: CustomFile = CustomFile::from_custom(custom.as_ref());
 
                 if !file.is_closed() {
                     println!("Closed unclosed file");
-                    unsafe { libc::fclose(file.get_file()); }
+                    unsafe {
+                        libc::fclose(file.get_file());
+                    }
                     file.close();
                 }
             }
@@ -807,8 +1164,12 @@ pub fn add_string(scope: &mut Scope) {
 }
 
 pub fn add_vars(scope: &mut Scope) {
-    scope.variables.insert("true".to_string(), Rc::new(Int::new(1)));
-    scope.variables.insert("false".to_string(), Rc::new(Int::new(0)));
+    scope
+        .variables
+        .insert("true".to_string(), Rc::new(Int::new(1)));
+    scope
+        .variables
+        .insert("false".to_string(), Rc::new(Int::new(0)));
 }
 
 pub fn add_core(scope: &mut Scope) {

@@ -1,4 +1,4 @@
-use easy_prog::types::{Scope, Function};
+use easy_prog::types::{Function, Scope};
 
 #[test]
 fn test_scope_from_scope() {
@@ -9,11 +9,23 @@ fn test_scope_from_scope() {
     assert!(!other_scope.has_function(",test_func"));
     assert!(!other_scope.has_function(",test_func2"));
 
-    scope.set_function(",test_func", Function { native: None, body: None });
+    scope.set_function(
+        ",test_func",
+        Function {
+            native: None,
+            body: None,
+        },
+    );
     assert!(scope.has_function(",test_func"));
     assert!(other_scope.has_function(",test_func"));
 
-    other_scope.set_function(",test_func2", Function { native: None, body: None });
+    other_scope.set_function(
+        ",test_func2",
+        Function {
+            native: None,
+            body: None,
+        },
+    );
     assert!(!scope.has_function(",test_func2"));
     assert!(other_scope.has_function(",test_func2"));
 }

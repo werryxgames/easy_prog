@@ -12,7 +12,7 @@ pub enum TokenType {
     Comma,
     _CommentUnknown,
     _CommentLine,
-    _CommentBlock
+    _CommentBlock,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -20,12 +20,17 @@ pub struct Token {
     pub token_type: TokenType,
     pub content: String,
     pub line: u32,
-    pub column: u32
+    pub column: u32,
 }
 
 impl Token {
     pub fn new(token_type: TokenType, line: u32, column: u32, content: &str) -> Token {
-        Token { token_type, content: content.to_string(), line, column }
+        Token {
+            token_type,
+            content: content.to_string(),
+            line,
+            column,
+        }
     }
 }
 
@@ -33,13 +38,15 @@ impl Token {
 pub struct LexerError {
     pub line: u32,
     pub column: u32,
-    pub description: String
+    pub description: String,
 }
 
 const DIGITS_FIRST: &str = "-0123456789";
 const DIGITS: &str = "0123456789";
-const IDENTIFIER_CHARS_FIRST: &str = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_+-*/%$^!&~`/?:<>";
-const IDENTIFIER_CHARS: &str = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_+-*/%$^!&~`/?:<>0123456789";
+const IDENTIFIER_CHARS_FIRST: &str =
+    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_+-*/%$^!&~`/?:<>";
+const IDENTIFIER_CHARS: &str =
+    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_+-*/%$^!&~`/?:<>0123456789";
 const WHITESPACE_CHARS: &str = " \t\n";
 // const USED_CHARS: &str = "(),{}#";
 // const RESERVED_CHARS: &str = "@;[]\\";
@@ -147,7 +154,7 @@ pub fn get_type_start(chr: char) -> Option<TokenType> {
 pub fn is_type_end(chr: char, token_type: &TokenType) -> bool {
     match token_type {
         TokenType::String => is_string_end(chr),
-        _ => false
+        _ => false,
     }
 }
 
@@ -155,17 +162,30 @@ pub fn is_still_type(chr: char, token_type: &TokenType) -> bool {
     match token_type {
         TokenType::Number => is_number_char(chr, false),
         TokenType::Identifier => is_identifier_char(chr, false),
-        TokenType::Lparen | TokenType::Rparen | TokenType::Lbrace | TokenType::Rbrace | TokenType::Comma => false,
-        _ => true
+        TokenType::Lparen
+        | TokenType::Rparen
+        | TokenType::Lbrace
+        | TokenType::Rbrace
+        | TokenType::Comma => false,
+        _ => true,
     }
 }
 
 pub fn is_not_continuer(token: Token) -> bool {
-    token.token_type != TokenType::Lbrace && token.token_type != TokenType::Lparen && token.token_type != TokenType::Rbrace && token.token_type != TokenType::Rparen && token.token_type != TokenType::Comma
+    token.token_type != TokenType::Lbrace
+        && token.token_type != TokenType::Lparen
+        && token.token_type != TokenType::Rbrace
+        && token.token_type != TokenType::Rparen
+        && token.token_type != TokenType::Comma
 }
 
 pub fn is_not_after_continuer(token: Token) -> bool {
-    token.token_type != TokenType::Rparen && token.token_type != TokenType::Rbrace && token.token_type != TokenType::Identifier && token.token_type != TokenType::Number && token.token_type != TokenType::String && token.token_type != TokenType::Lbrace
+    token.token_type != TokenType::Rparen
+        && token.token_type != TokenType::Rbrace
+        && token.token_type != TokenType::Identifier
+        && token.token_type != TokenType::Number
+        && token.token_type != TokenType::String
+        && token.token_type != TokenType::Lbrace
 }
 
 pub fn are_tokens_correct(tokens: &Vec<Token>) -> Result<(), LexerError> {
@@ -179,12 +199,16 @@ pub fn are_tokens_correct(tokens: &Vec<Token>) -> Result<(), LexerError> {
     // String:SHOULDN'T MET
     // Unknown:SHOULDN'T MET
 
-    if tokens.len() == 0 {
+    if tokens.is_empty() {
         return Ok(());
     }
 
     if tokens[0].token_type != TokenType::Identifier {
-        return Err(LexerError { line: 1, column: 1, description: "First element should be identifier".to_string() });
+        return Err(LexerError {
+            line: 1,
+            column: 1,
+            description: "First element should be identifier".to_string(),
+        });
     }
 
     let mut i = 0;
@@ -197,35 +221,57 @@ pub fn are_tokens_correct(tokens: &Vec<Token>) -> Result<(), LexerError> {
         i += 1;
 
         match token.token_type {
-            TokenType::Lparen => brackets.push(&token),
-            TokenType::Lbrace => brackets.push(&token),
+            TokenType::Lparen => brackets.push(token),
+            TokenType::Lbrace => brackets.push(token),
             TokenType::Rparen => {
                 let open_token_result = brackets.pop();
 
                 if open_token_result.is_none() {
-                    return Err(LexerError { line: token.line, column: token.column, description: "Unexpected closing bracket".to_string() });
+                    return Err(LexerError {
+                        line: token.line,
+                        column: token.column,
+                        description: "Unexpected closing bracket".to_string(),
+                    });
                 }
-                
+
                 let open_token = unsafe { open_token_result.unwrap_unchecked() };
 
                 if open_token.token_type != TokenType::Lparen {
-                    return Err(LexerError { line: token.line, column: token.column, description: format!("Unclosed bracket in line {} column {}", open_token.line, open_token.column) });
+                    return Err(LexerError {
+                        line: token.line,
+                        column: token.column,
+                        description: format!(
+                            "Unclosed bracket in line {} column {}",
+                            open_token.line, open_token.column
+                        ),
+                    });
                 }
-            },
+            }
             TokenType::Rbrace => {
                 let open_token_result = brackets.pop();
 
                 if open_token_result.is_none() {
-                    return Err(LexerError { line: token.line, column: token.column, description: "Unexpected closing bracket".to_string() });
+                    return Err(LexerError {
+                        line: token.line,
+                        column: token.column,
+                        description: "Unexpected closing bracket".to_string(),
+                    });
                 }
-                
+
                 let open_token = unsafe { open_token_result.unwrap_unchecked() };
 
                 if open_token.token_type != TokenType::Lbrace {
-                    return Err(LexerError { line: token.line, column: token.column, description: format!("Unclosed bracket in line {} column {}", open_token.line, open_token.column) });
+                    return Err(LexerError {
+                        line: token.line,
+                        column: token.column,
+                        description: format!(
+                            "Unclosed bracket in line {} column {}",
+                            open_token.line, open_token.column
+                        ),
+                    });
                 }
-            },
-            _ => continue
+            }
+            _ => continue,
         }
     }
 
@@ -238,7 +284,11 @@ pub fn are_tokens_correct(tokens: &Vec<Token>) -> Result<(), LexerError> {
                     break;
                 }
 
-                return Err(LexerError { line: $token.line, column: $token.column, description: "Unterminated left parentheses (')')".to_string() });
+                return Err(LexerError {
+                    line: $token.line,
+                    column: $token.column,
+                    description: "Unterminated left parentheses (')')".to_string(),
+                });
             }
         };
     }
@@ -250,83 +300,149 @@ pub fn are_tokens_correct(tokens: &Vec<Token>) -> Result<(), LexerError> {
         match token.token_type {
             TokenType::Identifier => {
                 if i >= tokens_length {
-                    return Err(LexerError { line: token.line, column: token.column, description: "Unterminated left parentheses (')')".to_string() });
+                    return Err(LexerError {
+                        line: token.line,
+                        column: token.column,
+                        description: "Unterminated left parentheses (')')".to_string(),
+                    });
                 }
 
                 if is_not_continuer(tokens[i].clone()) {
-                    return Err(LexerError { line: token.line, column: token.column, description: "Unexpected type after identifier".to_string() });
+                    return Err(LexerError {
+                        line: token.line,
+                        column: token.column,
+                        description: "Unexpected type after identifier".to_string(),
+                    });
                 }
-            },
+            }
             TokenType::Number => {
                 if i >= tokens_length {
-                    return Err(LexerError { line: token.line, column: token.column, description: "Unterminated left parentheses (')')".to_string() });
+                    return Err(LexerError {
+                        line: token.line,
+                        column: token.column,
+                        description: "Unterminated left parentheses (')')".to_string(),
+                    });
                 }
 
                 if is_not_continuer(tokens[i].clone()) {
-                    return Err(LexerError { line: token.line, column: token.column, description: "Unexpected type after number".to_string() });
+                    return Err(LexerError {
+                        line: token.line,
+                        column: token.column,
+                        description: "Unexpected type after number".to_string(),
+                    });
                 }
-            },
+            }
             TokenType::String => {
                 if i >= tokens_length {
-                    return Err(LexerError { line: token.line, column: token.column, description: "Unterminated left parentheses (')')".to_string() });
+                    return Err(LexerError {
+                        line: token.line,
+                        column: token.column,
+                        description: "Unterminated left parentheses (')')".to_string(),
+                    });
                 }
 
                 if is_not_continuer(tokens[i].clone()) {
-                    return Err(LexerError { line: token.line, column: token.column, description: "Unexpected type after string".to_string() });
+                    return Err(LexerError {
+                        line: token.line,
+                        column: token.column,
+                        description: "Unexpected type after string".to_string(),
+                    });
                 }
-            },
+            }
             TokenType::Comma => {
                 check_paren!(i, tokens_length, scope_level, token);
 
                 if is_not_after_continuer(tokens[i].clone()) {
-                    return Err(LexerError { line: token.line, column: token.column, description: "Unexpected type after comma (',')".to_string() });
+                    return Err(LexerError {
+                        line: token.line,
+                        column: token.column,
+                        description: "Unexpected type after comma (',')".to_string(),
+                    });
                 }
-            },
+            }
             TokenType::Lparen => {
                 scope_level += 1;
 
                 if i >= tokens_length {
-                    return Err(LexerError { line: token.line, column: token.column, description: "Unterminated left parentheses (')')".to_string() });
+                    return Err(LexerError {
+                        line: token.line,
+                        column: token.column,
+                        description: "Unterminated left parentheses (')')".to_string(),
+                    });
                 }
 
-                if tokens[i].token_type != TokenType::Comma && is_not_after_continuer(tokens[i].clone()) {
-                    return Err(LexerError { line: token.line, column: token.column, description: "Unexpected type after left parentheses ('(')".to_string() });
+                if tokens[i].token_type != TokenType::Comma
+                    && is_not_after_continuer(tokens[i].clone())
+                {
+                    return Err(LexerError {
+                        line: token.line,
+                        column: token.column,
+                        description: "Unexpected type after left parentheses ('(')".to_string(),
+                    });
                 }
-            },
+            }
             TokenType::Rparen => {
                 scope_level -= 1;
 
                 check_paren!(i, tokens_length, scope_level, token);
 
-                if tokens[i].token_type != TokenType::Comma && tokens[i].token_type != TokenType::Rparen && tokens[i].token_type != TokenType::Rbrace {
-                    return Err(LexerError { line: token.line, column: token.column, description: "Unexpected type after right parentheses (')')".to_string() });
+                if tokens[i].token_type != TokenType::Comma
+                    && tokens[i].token_type != TokenType::Rparen
+                    && tokens[i].token_type != TokenType::Rbrace
+                {
+                    return Err(LexerError {
+                        line: token.line,
+                        column: token.column,
+                        description: "Unexpected type after right parentheses (')')".to_string(),
+                    });
                 }
-            },
+            }
             TokenType::Lbrace => {
                 scope_level += 1;
 
                 if i >= tokens_length {
-                    return Err(LexerError { line: token.line, column: token.column, description: "Unterminated left parentheses (')')".to_string() });
+                    return Err(LexerError {
+                        line: token.line,
+                        column: token.column,
+                        description: "Unterminated left parentheses (')')".to_string(),
+                    });
                 }
 
-                if tokens[i].token_type != TokenType::Comma && is_not_after_continuer(tokens[i].clone()) {
-                    return Err(LexerError { line: token.line, column: token.column, description: "Unexpected type after left brace ('{')".to_string() });
+                if tokens[i].token_type != TokenType::Comma
+                    && is_not_after_continuer(tokens[i].clone())
+                {
+                    return Err(LexerError {
+                        line: token.line,
+                        column: token.column,
+                        description: "Unexpected type after left brace ('{')".to_string(),
+                    });
                 }
-            },
+            }
             TokenType::Rbrace => {
                 scope_level -= 1;
 
                 check_paren!(i, tokens_length, scope_level, token);
 
-                if tokens[i].token_type != TokenType::Comma && tokens[i].token_type != TokenType::Rparen && tokens[i].token_type != TokenType::Rbrace {
-                    return Err(LexerError { line: token.line, column: token.column, description: "Unexpected type after right brace ('}')".to_string() });
+                if tokens[i].token_type != TokenType::Comma
+                    && tokens[i].token_type != TokenType::Rparen
+                    && tokens[i].token_type != TokenType::Rbrace
+                {
+                    return Err(LexerError {
+                        line: token.line,
+                        column: token.column,
+                        description: "Unexpected type after right brace ('}')".to_string(),
+                    });
                 }
-            },
+            }
             _ => {
-                return Err(LexerError { line: token.line, column: token.column, description: "Unexpected token type".to_string() });
+                return Err(LexerError {
+                    line: token.line,
+                    column: token.column,
+                    description: "Unexpected token type".to_string(),
+                });
             }
         }
-    };
+    }
 
     Ok(())
 }
@@ -336,14 +452,19 @@ fn _to_tokens(code: &str) -> Result<Vec<Token>, LexerError> {
     let mut line: u32 = 1;
     let mut column: u32 = 0;
     let mut tokens: Vec<Token> = Vec::new();
-    let mut next_token: Token = Token { token_type: TokenType::Unknown, content: String::new(), line, column: column + 1 };
+    let mut next_token: Token = Token {
+        token_type: TokenType::Unknown,
+        content: String::new(),
+        line,
+        column: column + 1,
+    };
     let mut next_char: char = '\0';
 
     loop {
         let chr;
 
         if next_char == '\0' {
-            let chr_result = chars.nth(0);
+            let chr_result = chars.next();
 
             if chr_result.is_none() {
                 break;
@@ -380,7 +501,11 @@ fn _to_tokens(code: &str) -> Result<Vec<Token>, LexerError> {
         }
 
         if next_token.token_type == TokenType::_CommentLine {
-            if is_comment_end(unsafe { next_token.content.pop().unwrap_unchecked() }, chr, false) {
+            if is_comment_end(
+                unsafe { next_token.content.pop().unwrap_unchecked() },
+                chr,
+                false,
+            ) {
                 next_token.token_type = TokenType::Unknown;
                 next_token.content.clear();
             } else {
@@ -391,7 +516,11 @@ fn _to_tokens(code: &str) -> Result<Vec<Token>, LexerError> {
         }
 
         if next_token.token_type == TokenType::_CommentBlock {
-            if is_comment_end(unsafe { next_token.content.pop().unwrap_unchecked() }, chr, true) {
+            if is_comment_end(
+                unsafe { next_token.content.pop().unwrap_unchecked() },
+                chr,
+                true,
+            ) {
                 next_token.token_type = TokenType::Unknown;
                 next_token.content.clear();
             } else {
@@ -403,7 +532,11 @@ fn _to_tokens(code: &str) -> Result<Vec<Token>, LexerError> {
         }
 
         if next_token.token_type == TokenType::String && chr == '\n' {
-            return Err(LexerError { line: next_token.line, column: next_token.column, description: "Unterminated string literal".to_string() })
+            return Err(LexerError {
+                line: next_token.line,
+                column: next_token.column,
+                description: "Unterminated string literal".to_string(),
+            });
         }
 
         if next_token.token_type == TokenType::Unknown {
@@ -420,16 +553,29 @@ fn _to_tokens(code: &str) -> Result<Vec<Token>, LexerError> {
             next_token.line = line;
             next_token.column = column;
             match get_type_start(chr) {
-                Some(token_type) => { next_token.token_type = token_type; continue; },
-                None => next_token.token_type = get_token_type(chr)
+                Some(token_type) => {
+                    next_token.token_type = token_type;
+                    continue;
+                }
+                None => next_token.token_type = get_token_type(chr),
             };
         } else if is_type_end(chr, &next_token.token_type) {
             tokens.push(next_token);
-            next_token = Token { token_type: TokenType::Unknown, content: String::new(), line: 0, column: 0 };
+            next_token = Token {
+                token_type: TokenType::Unknown,
+                content: String::new(),
+                line: 0,
+                column: 0,
+            };
             continue;
         } else if !is_still_type(chr, &next_token.token_type) {
             tokens.push(next_token);
-            next_token = Token { token_type: TokenType::Unknown, content: String::new(), line: 0, column: 0 };
+            next_token = Token {
+                token_type: TokenType::Unknown,
+                content: String::new(),
+                line: 0,
+                column: 0,
+            };
             next_char = chr;
 
             if column == 0 && line > 0 {
@@ -445,12 +591,16 @@ fn _to_tokens(code: &str) -> Result<Vec<Token>, LexerError> {
     }
 
     if next_token.token_type == TokenType::String {
-        return Err(LexerError { line: next_token.line, column: next_token.column, description: "Unterminated string literal".to_string() })
+        return Err(LexerError {
+            line: next_token.line,
+            column: next_token.column,
+            description: "Unterminated string literal".to_string(),
+        });
     }
 
     match are_tokens_correct(&tokens) {
         Err(error) => Err(error),
-        Ok(_value) => Ok(tokens)
+        Ok(_value) => Ok(tokens),
     }
 }
 

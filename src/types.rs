@@ -11,7 +11,7 @@ pub enum Type {
     Int,
     Str,
     Func,
-    Custom
+    Custom,
 }
 
 #[repr(u8)]
@@ -21,7 +21,7 @@ pub enum NodeType {
     CallFunc = 1,
     ConstInt = 2,
     ConstStr = 3,
-    Identifier = 4
+    Identifier = 4,
 }
 
 pub trait Variant {
@@ -48,7 +48,7 @@ impl PartialEq for dyn Variant {
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub struct Int {
-    pub number: i64
+    pub number: i64,
 }
 
 impl Int {
@@ -89,12 +89,14 @@ impl Variant for Int {
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Str {
-    pub text: String
+    pub text: String,
 }
 
 impl Str {
     pub fn new(text: &str) -> Str {
-        Str { text: text.to_string() }
+        Str {
+            text: text.to_string(),
+        }
     }
 }
 
@@ -170,7 +172,9 @@ impl Variant for Rc<dyn Custom> {
         let repr = self.repr();
 
         if repr.is_some() {
-            f.write_fmt(format_args!("Custom({}, {:?})", self.get_id(), unsafe { repr.unwrap_unchecked() }))
+            f.write_fmt(format_args!("Custom({}, {:?})", self.get_id(), unsafe {
+                repr.unwrap_unchecked()
+            }))
         } else {
             f.write_fmt(format_args!("Custom({})", self.get_id()))
         }
@@ -193,6 +197,12 @@ pub struct Void {}
 impl Void {
     pub fn new() -> Void {
         Void {}
+    }
+}
+
+impl Default for Void {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -249,19 +259,32 @@ impl PartialEq for dyn AstNode {
     }
 }
 
+type NativeFn = fn(
+    line: u32,
+    column: u32,
+    scope: &mut Scope,
+    args: Vec<Rc<dyn Variant>>,
+) -> Result<Rc<dyn Variant>, NativeException>;
+
 #[derive(Debug, Clone)]
 pub struct Function {
-    pub native: Option<fn(line: u32, column: u32, scope: &mut Scope, args: Vec<Rc<dyn Variant>>) -> Result<Rc<dyn Variant>, NativeException>>,
-    pub body: Option<SequenceNode>
+    pub native: Option<NativeFn>,
+    pub body: Option<SequenceNode>,
 }
 
 impl Function {
-    pub fn new_native(func: fn(line: u32, column: u32, scope: &mut Scope, args: Vec<Rc<dyn Variant>>) -> Result<Rc<dyn Variant>, NativeException>) -> Function {
-        Function { native: Some(func), body: None }
+    pub fn new_native(func: NativeFn) -> Function {
+        Function {
+            native: Some(func),
+            body: None,
+        }
     }
 
     pub fn new(body: SequenceNode) -> Function {
-        Function { native: None, body: Some(body) }
+        Function {
+            native: None,
+            body: Some(body),
+        }
     }
 }
 
@@ -279,7 +302,8 @@ impl PartialEq for Function {
             return true;
         }
 
-        unsafe { self.body.as_ref().unwrap_unchecked() }.body == unsafe { other.body.as_ref().unwrap_unchecked() }.body
+        unsafe { self.body.as_ref().unwrap_unchecked() }.body
+            == unsafe { other.body.as_ref().unwrap_unchecked() }.body
     }
 }
 
@@ -306,11 +330,16 @@ impl Variant for Function {
 
     fn print(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         if self.native.is_some() {
-            return f.write_fmt(format_args!("NativeFunction({:?})", unsafe { self.native.unwrap_unchecked() } as *mut ()));
+            return f.write_fmt(format_args!("NativeFunction({:?})", unsafe {
+                self.native.unwrap_unchecked()
+            }
+                as *mut ()));
         }
 
         if self.body.is_some() {
-            return f.write_fmt(format_args!("Function({:?})", unsafe { self.body.as_ref().unwrap_unchecked() }));
+            return f.write_fmt(format_args!("Function({:?})", unsafe {
+                self.body.as_ref().unwrap_unchecked()
+            }));
         }
 
         f.write_str("NullFunction")
@@ -331,7 +360,9 @@ impl Variant for Function {
             return self.native == other_var.native;
         }
 
-        self.native == other_var.native && unsafe { self.body.as_ref().unwrap_unchecked() }.body == unsafe { other_var.body.as_ref().unwrap_unchecked() }.body
+        self.native == other_var.native
+            && unsafe { self.body.as_ref().unwrap_unchecked() }.body
+                == unsafe { other_var.body.as_ref().unwrap_unchecked() }.body
     }
 }
 
@@ -340,7 +371,7 @@ impl Variant for Function {
 pub struct SequenceNode {
     pub line: u32,
     pub column: u32,
-    pub body: Vec<Rc<dyn AstNode>>
+    pub body: Vec<Rc<dyn AstNode>>,
 }
 
 impl SequenceNode {
@@ -359,7 +390,7 @@ macro_rules! print_list {
                 $f.write_str(", ")?;
             }
         }
-    }
+    };
 }
 
 impl AstNode for SequenceNode {
@@ -409,12 +440,17 @@ pub struct CallFuncNode {
     pub line: u32,
     pub column: u32,
     pub name: String,
-    pub args: Vec<Rc<dyn AstNode>>
+    pub args: Vec<Rc<dyn AstNode>>,
 }
 
 impl CallFuncNode {
     pub fn new(line: u32, column: u32, name: String, args: Vec<Rc<dyn AstNode>>) -> CallFuncNode {
-        CallFuncNode { line, column, name, args }
+        CallFuncNode {
+            line,
+            column,
+            name,
+            args,
+        }
     }
 }
 
@@ -468,12 +504,16 @@ impl AstNode for CallFuncNode {
 pub struct ConstIntNode {
     pub line: u32,
     pub column: u32,
-    pub value: Int
+    pub value: Int,
 }
 
 impl ConstIntNode {
     pub fn new(line: u32, column: u32, value: Int) -> ConstIntNode {
-        ConstIntNode { line, column, value }
+        ConstIntNode {
+            line,
+            column,
+            value,
+        }
     }
 }
 
@@ -520,12 +560,16 @@ impl AstNode for ConstIntNode {
 pub struct ConstStrNode {
     pub line: u32,
     pub column: u32,
-    pub value: Str
+    pub value: Str,
 }
 
 impl ConstStrNode {
     pub fn new(line: u32, column: u32, value: Str) -> ConstStrNode {
-        ConstStrNode { line, column, value }
+        ConstStrNode {
+            line,
+            column,
+            value,
+        }
     }
 }
 
@@ -572,12 +616,16 @@ impl AstNode for ConstStrNode {
 pub struct VariableNode {
     pub line: u32,
     pub column: u32,
-    pub name: String
+    pub name: String,
 }
 
 impl VariableNode {
     pub fn new(line: u32, column: u32, name: &str) -> VariableNode {
-        VariableNode { line, column, name: name.to_string() }
+        VariableNode {
+            line,
+            column,
+            name: name.to_string(),
+        }
     }
 }
 
@@ -623,12 +671,16 @@ impl AstNode for VariableNode {
 pub struct NativeException {
     pub line: u32,
     pub column: u32,
-    pub description: String
+    pub description: String,
 }
 
 impl NativeException {
     pub fn new(line: u32, column: u32, description: &str) -> NativeException {
-        NativeException { line, column, description: description.to_string() }
+        NativeException {
+            line,
+            column,
+            description: description.to_string(),
+        }
     }
 }
 
@@ -637,16 +689,25 @@ pub struct Scope {
     pub variables: HashMap<String, Rc<dyn Variant>>,
     pub functions: HashMap<String, Function>,
     pub parent_scope: Option<*const Scope>,
-    pub destructors: Vec<fn(&mut Scope)>
+    pub destructors: Vec<fn(&mut Scope)>,
 }
 
 impl Scope {
-    pub fn new(variables: HashMap<String, Rc<dyn Variant>>, functions: HashMap<String, Function>, parent: Option<*const Scope>) -> Scope {
-        Scope { variables, functions, parent_scope: parent, destructors: Vec::new() }
+    pub fn new(
+        variables: HashMap<String, Rc<dyn Variant>>,
+        functions: HashMap<String, Function>,
+        parent: Option<*const Scope>,
+    ) -> Scope {
+        Scope {
+            variables,
+            functions,
+            parent_scope: parent,
+            destructors: Vec::new(),
+        }
     }
 
     pub fn empty() -> Scope {
-        Scope::new(HashMap::new(), HashMap::new(), None )
+        Scope::new(HashMap::new(), HashMap::new(), None)
     }
 
     pub fn with_stdlib() -> Scope {
@@ -662,12 +723,14 @@ impl Scope {
     }
 
     pub fn has_variable(&self, name: &str) -> bool {
-        self.variables.contains_key(name) || (self.parent_scope.is_some() && unsafe { (*self.parent_scope.unwrap_unchecked()).has_variable(name) })
+        self.variables.contains_key(name)
+            || (self.parent_scope.is_some()
+                && unsafe { (*self.parent_scope.unwrap_unchecked()).has_variable(name) })
     }
 
     pub fn get_variable(&self, name: &str) -> Option<&Rc<dyn Variant>> {
         let var = self.variables.get(name);
-        
+
         if var.is_some() {
             return Some(unsafe { var.unwrap_unchecked() });
         }
@@ -684,12 +747,14 @@ impl Scope {
     }
 
     pub fn has_function(&self, name: &str) -> bool {
-        self.functions.contains_key(name) || (self.parent_scope.is_some() && unsafe { (*self.parent_scope.unwrap_unchecked()).has_function(name) })
+        self.functions.contains_key(name)
+            || (self.parent_scope.is_some()
+                && unsafe { (*self.parent_scope.unwrap_unchecked()).has_function(name) })
     }
 
     pub fn get_function(&self, name: &str) -> Option<&Function> {
         let func = self.functions.get(name);
-        
+
         if func.is_some() {
             return Some(unsafe { func.unwrap_unchecked() });
         }
@@ -717,4 +782,3 @@ impl Drop for Scope {
         }
     }
 }
-

@@ -1,4 +1,4 @@
-use easy_prog::lexer::{to_tokens_rev, Token, TokenType, LexerError};
+use easy_prog::lexer::{to_tokens_rev, LexerError, Token, TokenType};
 
 macro_rules! test_tokens {
     ($code: expr, $tokens: expr) => {
@@ -37,67 +37,98 @@ fn vec_cmp<T: PartialEq>(vec1: &Vec<T>, vec2: &Vec<T>) -> bool {
         i += 1;
     }
 
-    return true;
+    true
 }
 
 #[test]
 fn test_print() {
-    test_tokens!("print()", vec![
-        Token::new(TokenType::Identifier, 1, 1, "print"),
-        Token::new(TokenType::Lparen, 1, 6, "("),
-        Token::new(TokenType::Rparen, 1, 7, ")"),
-    ]);
-    test_tokens!("print(123)", vec![
-        Token::new(TokenType::Identifier, 1, 1, "print"),
-        Token::new(TokenType::Lparen, 1, 6, "("),
-        Token::new(TokenType::Number, 1, 7, "123"),
-        Token::new(TokenType::Rparen, 1, 10, ")"),
-    ]);
-    test_tokens!("print(\"Hello, World!\")", vec![
-        Token::new(TokenType::Identifier, 1, 1, "print"),
-        Token::new(TokenType::Lparen, 1, 6, "("),
-        Token::new(TokenType::String, 1, 7, "Hello, World!"),
-        Token::new(TokenType::Rparen, 1, 22, ")"),
-    ]);
-    test_tokens!("print  \t\n ( 5,4,  1     ,print\t)\n", vec![
-        Token::new(TokenType::Identifier, 1, 1, "print"),
-        Token::new(TokenType::Lparen, 2, 2, "("),
-        Token::new(TokenType::Number, 2, 4, "5"),
-        Token::new(TokenType::Comma, 2, 5, ","),
-        Token::new(TokenType::Number, 2, 6, "4"),
-        Token::new(TokenType::Comma, 2, 7, ","),
-        Token::new(TokenType::Number, 2, 10, "1"),
-        Token::new(TokenType::Comma, 2, 16, ","),
-        Token::new(TokenType::Identifier, 2, 17, "print"),
-        Token::new(TokenType::Rparen, 2, 23, ")"),
-    ]);
+    test_tokens!(
+        "print()",
+        vec![
+            Token::new(TokenType::Identifier, 1, 1, "print"),
+            Token::new(TokenType::Lparen, 1, 6, "("),
+            Token::new(TokenType::Rparen, 1, 7, ")"),
+        ]
+    );
+    test_tokens!(
+        "print(123)",
+        vec![
+            Token::new(TokenType::Identifier, 1, 1, "print"),
+            Token::new(TokenType::Lparen, 1, 6, "("),
+            Token::new(TokenType::Number, 1, 7, "123"),
+            Token::new(TokenType::Rparen, 1, 10, ")"),
+        ]
+    );
+    test_tokens!(
+        "print(\"Hello, World!\")",
+        vec![
+            Token::new(TokenType::Identifier, 1, 1, "print"),
+            Token::new(TokenType::Lparen, 1, 6, "("),
+            Token::new(TokenType::String, 1, 7, "Hello, World!"),
+            Token::new(TokenType::Rparen, 1, 22, ")"),
+        ]
+    );
+    test_tokens!(
+        "print  \t\n ( 5,4,  1     ,print\t)\n",
+        vec![
+            Token::new(TokenType::Identifier, 1, 1, "print"),
+            Token::new(TokenType::Lparen, 2, 2, "("),
+            Token::new(TokenType::Number, 2, 4, "5"),
+            Token::new(TokenType::Comma, 2, 5, ","),
+            Token::new(TokenType::Number, 2, 6, "4"),
+            Token::new(TokenType::Comma, 2, 7, ","),
+            Token::new(TokenType::Number, 2, 10, "1"),
+            Token::new(TokenType::Comma, 2, 16, ","),
+            Token::new(TokenType::Identifier, 2, 17, "print"),
+            Token::new(TokenType::Rparen, 2, 23, ")"),
+        ]
+    );
 }
 
 #[test]
 fn test_print_error() {
-    test_error!("pri nt()", LexerError { line: 1, column: 1, description: "Unexpected type after identifier".to_string() });
+    test_error!(
+        "pri nt()",
+        LexerError {
+            line: 1,
+            column: 1,
+            description: "Unexpected type after identifier".to_string()
+        }
+    );
 }
 
 #[test]
 fn test_comments() {
-    test_tokens!("print() # Does nothing", vec![
-        Token::new(TokenType::Identifier, 1, 1, "print"),
-        Token::new(TokenType::Lparen, 1, 6, "("),
-        Token::new(TokenType::Rparen, 1, 7, ")"),
-    ]);
-    test_tokens!("## print() ## print()", vec![
-        Token::new(TokenType::Identifier, 1, 15, "print"),
-        Token::new(TokenType::Lparen, 1, 20, "("),
-        Token::new(TokenType::Rparen, 1, 21, ")"),
-    ]);
-    test_tokens!("# Comment\nprint()", vec![
-        Token::new(TokenType::Identifier, 2, 1, "print"),
-        Token::new(TokenType::Lparen, 2, 6, "("),
-        Token::new(TokenType::Rparen, 2, 7, ")"),
-    ]);
-    test_tokens!("## Comment\nprint() ##print()", vec![
-        Token::new(TokenType::Identifier, 2, 11, "print"),
-        Token::new(TokenType::Lparen, 2, 16, "("),
-        Token::new(TokenType::Rparen, 2, 17, ")"),
-    ]);
+    test_tokens!(
+        "print() # Does nothing",
+        vec![
+            Token::new(TokenType::Identifier, 1, 1, "print"),
+            Token::new(TokenType::Lparen, 1, 6, "("),
+            Token::new(TokenType::Rparen, 1, 7, ")"),
+        ]
+    );
+    test_tokens!(
+        "## print() ## print()",
+        vec![
+            Token::new(TokenType::Identifier, 1, 15, "print"),
+            Token::new(TokenType::Lparen, 1, 20, "("),
+            Token::new(TokenType::Rparen, 1, 21, ")"),
+        ]
+    );
+    test_tokens!(
+        "# Comment\nprint()",
+        vec![
+            Token::new(TokenType::Identifier, 2, 1, "print"),
+            Token::new(TokenType::Lparen, 2, 6, "("),
+            Token::new(TokenType::Rparen, 2, 7, ")"),
+        ]
+    );
+    test_tokens!(
+        "## Comment\nprint() ##print()",
+        vec![
+            Token::new(TokenType::Identifier, 2, 11, "print"),
+            Token::new(TokenType::Lparen, 2, 16, "("),
+            Token::new(TokenType::Rparen, 2, 17, ")"),
+        ]
+    );
 }
