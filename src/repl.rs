@@ -54,7 +54,7 @@ impl VarFuncHelper {
         let mut i = line_part.len();// TODO: probably -1
         let mut line_part_iter = line_part.chars().rev();
 
-        while i > 0 && is_identifier_char(unsafe { line_part_iter.next().unwrap() }, false) {
+        while i > 0 && is_identifier_char(unsafe { line_part_iter.next().unwrap_unchecked() }, false) {
             i -= 1;
         }
 
@@ -129,7 +129,7 @@ impl rustyline::hint::Hinter for VarFuncHelper {
         }
 
         let result = unsafe { list_values.get(0).unwrap_unchecked() };
-        let string = unsafe { result }.text.clone();
+        let string = result.text.clone();
         Some(VarFuncCandidate::new((*string)[pos - list.0..].to_string()))
     }
 }
@@ -138,19 +138,43 @@ impl rustyline::highlight::Highlighter for VarFuncHelper {}
 impl rustyline::validate::Validator for VarFuncHelper {}
 impl rustyline::Helper for VarFuncHelper {}
 
-pub fn start_repl_ex<T: Write>(scope: &mut Scope, out: &mut T) -> ! {
+pub struct ReplError {
+    pub description: String
+}
+
+impl ReplError {
+    pub fn new(description: &str) -> ReplError {
+        ReplError { description: description.to_string() }
+    }
+}
+
+pub fn start_repl_ex<T: Write>(scope: &mut Scope, out: &mut T) -> ReplError {
     let builder = rustyline::config::Builder::new();
-    let config = builder.max_history_size(HISTORY_LIMIT).unwrap()
-        .completion_type(rustyline::config::CompletionType::List)
+    let builder2 = builder.max_history_size(HISTORY_LIMIT);
+
+    if builder2.is_err() {
+        return ReplError::new(&format!("Config error: {}", unsafe { builder2.unwrap_err_unchecked() }));
+    }
+
+    let config = unsafe { builder2.unwrap_unchecked() }.completion_type(rustyline::config::CompletionType::List)
         .completion_prompt_limit(COMPLETION_LIMIT)
         .auto_add_history(true)
         .tab_stop(4)
         .bell_style(rustyline::config::BellStyle::Audible)
         .color_mode(rustyline::config::ColorMode::Forced)
         .build();
-    let mut editor = rustyline::Editor::<VarFuncHelper, rustyline::history::DefaultHistory>::with_config(config).unwrap();
+    let editor_result = rustyline::Editor::<VarFuncHelper, rustyline::history::DefaultHistory>::with_config(config);
+
+    if editor_result.is_err() {
+        return ReplError::new(&format!("Editor error: {}", unsafe { editor_result.unwrap_err_unchecked() }))
+    }
+
+    let mut editor = unsafe { editor_result.unwrap_unchecked() };
     editor.set_helper(Some(VarFuncHelper::new(scope)));
-    writeln!(out, "Easy Prog interpreter v.{} by Werryx Games", VERSION).unwrap();
+
+    if writeln!(out, "Easy Prog interpreter v.{} by Werryx Games", VERSION).is_err() {
+        return ReplError::new("Stdout write error");
+    }
 
     loop {
         if let Ok(line) = editor.readline(">>> ") {
@@ -158,7 +182,7 @@ pub fn start_repl_ex<T: Write>(scope: &mut Scope, out: &mut T) -> ! {
 
             if result.is_err() {
                 let error = unsafe { result.unwrap_err_unchecked() };
-                println!("Error on line {} column {}: {}", error.line, error.column, error.description);
+                let _ = writeln!(out, "Error on line {} column {}: {}", error.line, error.column, error.description);
                 continue;
             }
 
@@ -166,7 +190,7 @@ pub fn start_repl_ex<T: Write>(scope: &mut Scope, out: &mut T) -> ! {
 
             if result2.is_err() {
                 let error = unsafe { result2.unwrap_err_unchecked() };
-                println!("Error on line {} column {}: {}", error.line, error.column, error.description);
+                let _ = writeln!(out, "Error on line {} column {}: {}", error.line, error.column, error.description);
                 continue;
             }
 
@@ -175,38 +199,38 @@ pub fn start_repl_ex<T: Write>(scope: &mut Scope, out: &mut T) -> ! {
             match final_result.get_type() {
                 Type::Void => {},
                 Type::Int => {
-                    println!("{}", final_result.as_int().number)
+                    let _ = writeln!(out, "{}", final_result.as_int().number);
                 },
                 Type::Str => {
-                    println!("\"{}\"", final_result.as_str().text)
+                    let _ = writeln!(out, "\"{}\"", final_result.as_str().text);
                 },
                 Type::Func => {
                     let func = final_result.as_func();
 
                     if func.native.is_some() {
-                        println!("<NativeFunction({:#X})>", unsafe { func.native.unwrap_unchecked() } as usize);
+                        let _ = writeln!(out, "<NativeFunction({:#X})>", unsafe { func.native.unwrap_unchecked() } as usize);
                     } else {
-                        println!("<Function>");
+                        let _ = writeln!(out, "<Function>");
                     }
                 },
                 Type::Custom => {
                     let custom = final_result.as_custom();
-                    println!("<Custom id={}>", custom.get_id());
+                    let _ = writeln!(out, "<Custom id={}>", custom.get_id());
                 }
             };
 
             editor.set_helper(Some(VarFuncHelper::new(scope)));
-            println!();
-            out.flush().unwrap();
+            let _ = writeln!(out);
+            let _ = out.flush();
         }
     }
 }
 
-pub fn start_repl_scope(scope: &mut Scope) {
+pub fn start_repl_scope(scope: &mut Scope) -> ReplError {
     start_repl_ex(scope, &mut io::stdout())
 }
 
-pub fn start_repl() {
+pub fn start_repl() -> ReplError {
     start_repl_scope(&mut Scope::with_stdlib())
 }
 
