@@ -1,60 +1,159 @@
-use std::{io::{self, Write}, sync::Arc};
-use crate::{runner::run_line_scope, types::{Scope, Type}};
-use linefeed::{self, ReadResult, Completer, Terminal, Completion};
+use std::{io::{self, Write}, cmp};
+use crate::{runner::run_line_scope, types::{Scope, Type}, lexer::is_identifier_char};
 
 static VERSION: &str = "1.0.0";
 static HISTORY_LIMIT: usize = 1024;
+static COMPLETION_LIMIT: usize = 64;
 
-struct VarFuncCompleter {
-    scope: Scope
+#[derive(Clone)]
+struct VarFuncCandidate {
+    text: String,
+    hint: String
 }
 
-unsafe impl Sync for VarFuncCompleter {}
-unsafe impl Send for VarFuncCompleter {}
-
-impl VarFuncCompleter {
-    pub fn new(scope: &mut Scope) -> VarFuncCompleter {
-        VarFuncCompleter { scope: (*scope).clone() }
+impl VarFuncCandidate {
+    pub fn new(text: String) -> VarFuncCandidate {
+        VarFuncCandidate { text: text.clone(), hint: "\x1b[37m # ".to_string() + &text + "\x1b[0m" }
     }
 }
 
-impl<Term: Terminal> Completer<Term> for VarFuncCompleter {
-    fn complete(&self, word: &str, _prompter: &linefeed::Prompter<Term>,
-                _start: usize, _end: usize) -> Option<Vec<linefeed::Completion>> {
-        let mut variants: Vec<Completion> = Vec::new();
+impl rustyline::completion::Candidate for VarFuncCandidate {
+    fn display(&self) -> &str {
+        &self.text
+    }
+
+    fn replacement(&self) -> &str {
+        &self.text
+    }
+}
+
+impl rustyline::hint::Hint for VarFuncCandidate {
+    fn display(&self) -> &str {
+        &self.hint
+    }
+
+    fn completion(&self) -> Option<&str> {
+        Some(&self.text)
+    }
+}
+
+struct VarFuncHelper {
+    scope: Scope
+}
+
+impl VarFuncHelper {
+    pub fn new(scope: &mut Scope) -> VarFuncHelper {
+        VarFuncHelper { scope: (*scope).clone() }
+    }
+
+    pub fn get_completion_list(&self, line: &str, pos: usize,
+            _ctx: &rustyline::Context<'_>) ->
+            Result<(usize, Vec<VarFuncCandidate>), rustyline::error::ReadlineError> {
+        let mut variants: Vec<VarFuncCandidate> = Vec::new();
+        let line_part = line[..pos].to_string();
+        let mut i = line_part.len();// TODO: probably -1
+        let mut line_part_iter = line_part.chars().rev();
+
+        while i > 0 && is_identifier_char(unsafe { line_part_iter.next().unwrap() }, false) {
+            i -= 1;
+        }
+
+        let word = &line_part[i..];
 
         for var in self.scope.variables.iter() {
             if var.0.starts_with(word) && var.0 != word {
-                variants.push(Completion::simple(var.0.to_string()));
+                variants.push(VarFuncCandidate::new(var.0.to_string()));
             }
         }
 
         for func in self.scope.functions.iter() {
             if func.0.starts_with(word) && func.0 != word {
-                variants.push(Completion::simple(func.0.to_string()));
+                variants.push(VarFuncCandidate::new(func.0.to_string()));
             }
         }
-        
-        if variants.is_empty() {
-            return None;
-        }
 
-        Some(variants)
+        Ok((i, variants))
     }
 }
 
+impl rustyline::completion::Completer for VarFuncHelper {
+    type Candidate = VarFuncCandidate;
+
+    fn complete(&self, line: &str, pos: usize, ctx: &rustyline::Context<'_>) ->
+                Result<(usize, Vec<Self::Candidate>), rustyline::error::ReadlineError> {
+        self.get_completion_list(line, pos, ctx)
+    }
+}
+
+impl rustyline::hint::Hinter for VarFuncHelper {
+    type Hint = VarFuncCandidate;
+
+    fn hint(&self, line: &str, pos: usize, ctx: &rustyline::Context<'_>) -> Option<Self::Hint> {
+        let list = unsafe { self.get_completion_list(line, pos, ctx).unwrap_unchecked() };
+        let list_values = list.1;
+
+        if list_values.len() == 0 {
+            return None
+        }
+
+        if list_values.len() > 1 {
+            let mut iter = list_values.iter();
+            let mut common = unsafe { iter.next().unwrap_unchecked() }.text.clone();
+
+            for value in iter {
+                let mut i = 0;
+                let val_text_cloned = value.text.clone();
+                let mut val_text = val_text_cloned.chars();
+                let common_t_cloned = common.clone();
+                let mut common_t = common_t_cloned.chars();
+                let min_val = cmp::min(value.text.len(), common.len());
+
+                while i < min_val {
+                    if val_text.next() != common_t.next() {
+                        break;
+                    }
+
+                    i += 1;
+                }
+
+                common = common[..i].to_string();
+            }
+
+            common = common[pos - list.0..].to_string();
+
+            if common.is_empty() {
+                return None
+            }
+
+            return Some(VarFuncCandidate::new(common));
+        }
+
+        let result = unsafe { list_values.get(0).unwrap_unchecked() };
+        let string = unsafe { result }.text.clone();
+        Some(VarFuncCandidate::new((*string)[pos - list.0..].to_string()))
+    }
+}
+
+impl rustyline::highlight::Highlighter for VarFuncHelper {}
+impl rustyline::validate::Validator for VarFuncHelper {}
+impl rustyline::Helper for VarFuncHelper {}
+
 pub fn start_repl_ex<T: Write>(scope: &mut Scope, out: &mut T) -> ! {
-    let interface = linefeed::interface::Interface::new("Easy Prog").unwrap();
-    let mut reader = interface.lock_reader();
-    reader.set_history_size(HISTORY_LIMIT);
-    reader.set_completion_append_character(None);
-    reader.set_prompt(">>> ").unwrap();
-    reader.set_completer(Arc::new(VarFuncCompleter::new(scope)));
+    let builder = rustyline::config::Builder::new();
+    let config = builder.max_history_size(HISTORY_LIMIT).unwrap()
+        .completion_type(rustyline::config::CompletionType::List)
+        .completion_prompt_limit(COMPLETION_LIMIT)
+        .auto_add_history(true)
+        .tab_stop(4)
+        .bell_style(rustyline::config::BellStyle::Audible)
+        .color_mode(rustyline::config::ColorMode::Forced)
+        .build();
+    let mut editor = rustyline::Editor::<VarFuncHelper, rustyline::history::DefaultHistory>::with_config(config).unwrap();
+    editor.set_helper(Some(VarFuncHelper::new(scope)));
     writeln!(out, "Easy Prog interpreter v.{} by Werryx Games", VERSION).unwrap();
 
     loop {
-        if let ReadResult::Input(line) = reader.read_line().unwrap() {
-            reader.add_history_unique(line.clone());
+        if let Ok(line) = editor.readline(">>> ") {
             let result = run_line_scope(&line, scope);
 
             if result.is_err() {
@@ -96,7 +195,8 @@ pub fn start_repl_ex<T: Write>(scope: &mut Scope, out: &mut T) -> ! {
                 }
             };
 
-            reader.set_completer(Arc::new(VarFuncCompleter::new(scope)));
+            editor.set_helper(Some(VarFuncHelper::new(scope)));
+            println!();
             out.flush().unwrap();
         }
     }
