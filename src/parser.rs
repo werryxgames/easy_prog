@@ -26,6 +26,37 @@ impl ParserError {
     }
 }
 
+pub struct Vector<T: Clone> {
+    mut_vec: VecDeque<T>
+}
+
+impl<T: Clone> Vector<T> {
+    pub fn new(mut_vec: VecDeque<T>) -> Vector<T> {
+        return Vector { mut_vec }
+    }
+
+    pub fn pop_back(&mut self) -> Option<T> {
+        self.mut_vec.pop_back()
+    }
+
+    pub fn pop_front(&mut self) -> Option<T> {
+        self.mut_vec.pop_front()
+    }
+
+    pub fn len(&self) -> usize {
+        self.mut_vec.len()
+    }
+
+    pub fn get(&self, index: usize) -> Option<T> {
+        let position = index;
+        self.mut_vec.get(position).cloned()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.mut_vec.is_empty()
+    }
+}
+
 /*
 (* EBNF *)
 letter_lowercase = "a" | "b" | "c" | "d" | "e" | "f" | "g" | "h" | "i" | "j" | "k" | "l" | "m" | "n" | "o" | "p" | "q" | "r" | "s" | "t" | "u" | "v" | "w" | "x" | "y" | "z"
@@ -50,7 +81,7 @@ expression = string | identifier | number | func_call | func_body
 program = START expression_list END
  */
 
-pub fn parse_expression_list(tokens: &mut VecDeque<Token>, end_token: TokenType) -> Result<Vec<Rc<dyn AstNode>>, ParserError> {
+pub fn parse_expression_list(tokens: &mut Vector<Token>, end_token: TokenType) -> Result<Vec<Rc<dyn AstNode>>, ParserError> {
     let mut nodes: Vec<Rc<dyn AstNode>> = Vec::new();
     let first_expr: Result<Rc<dyn AstNode>, ParserError> = parse_expression(tokens);
 
@@ -75,12 +106,12 @@ pub fn parse_expression_list(tokens: &mut VecDeque<Token>, end_token: TokenType)
             return Err(error);
         }
 
-        let next_token = unsafe { tokens.pop_front().unwrap_unchecked() };
+        let next_token = unsafe { tokens.get(0).unwrap_unchecked() };
 
         if next_token.token_type == TokenType::Comma {
             last_comma = true;
+            tokens.pop_front();
         } else if next_token.token_type == end_token {
-            tokens.push_front(next_token);
             return Ok(nodes);
         } else {
             return Err(ParserError::new(next_token.line, next_token.column, "Unexpected token type, expected comma (',')", ParserErrorCode::UnexpectedType));
@@ -90,37 +121,35 @@ pub fn parse_expression_list(tokens: &mut VecDeque<Token>, end_token: TokenType)
     Ok(nodes)
 }
 
-pub fn parse_func_call(tokens: &mut VecDeque<Token>) -> Result<CallFuncNode, ParserError> {
+pub fn parse_func_call(tokens: &mut Vector<Token>) -> Result<CallFuncNode, ParserError> {
     if tokens.len() == 0 {
         return Err(ParserError::new(0, 0, "Expected function call, but found end of file", ParserErrorCode::EmptyTokenList));
     }
 
-    let cloned_tokens = tokens.clone();
-    let mut iter = cloned_tokens.iter();
-    let mut token: &Token = unsafe { iter.next().unwrap_unchecked() };
-    let first_token: &Token = token;
+    let mut token: Token = unsafe { tokens.get(0).unwrap_unchecked() };
+    let first_token: &Token = &token.clone();
 
     if token.token_type != TokenType::Identifier {
         return Err(ParserError::new(token.line, token.column, "Unexpected token type, expected identifier", ParserErrorCode::UnexpectedType));
     }
 
-    if iter.len() == 0 {
+    if tokens.len() == 1 {
         return Err(ParserError::new(0, 0, "Expected left parentheses ('('), but found end of file", ParserErrorCode::ShortTokenList));
     }
 
-    token = unsafe { iter.next().unwrap_unchecked() };
+    token = unsafe { tokens.get(1).unwrap_unchecked() };
 
     if token.token_type != TokenType::Lparen {
         return Err(ParserError::new(token.line, token.column, "Unexpected token type, expected left parentheses ('(')", ParserErrorCode::UnexpectedType));
     }
 
-    if iter.len() == 0 {
+    if tokens.len() == 2 {
         return Err(ParserError::new(0, 0, "Expected right parentheses (')'), but found end of file", ParserErrorCode::ShortTokenList));
     }
 
     let func_name = unsafe { tokens.pop_front().unwrap_unchecked() }.content;
     tokens.pop_front();
-    token = unsafe { iter.next().unwrap_unchecked() };
+    token = unsafe { tokens.get(0).unwrap_unchecked() };
 
     if token.token_type == TokenType::Rparen {
         tokens.pop_front();
@@ -148,14 +177,12 @@ pub fn parse_func_call(tokens: &mut VecDeque<Token>) -> Result<CallFuncNode, Par
     Err(ParserError::new(last_token.line, last_token.column, "Unexpected token type, expected right parentheses (')')", ParserErrorCode::ShortTokenList))
 }
 
-pub fn parse_func_body(tokens: &mut VecDeque<Token>) -> Result<SequenceNode, ParserError> {
+pub fn parse_func_body(tokens: &mut Vector<Token>) -> Result<SequenceNode, ParserError> {
     if tokens.len() < 2 {
         return Err(ParserError::new(0, 0, "Expected function body, but found end of file", ParserErrorCode::EmptyTokenList));
     }
 
-    let cloned_tokens = tokens.clone();
-    let mut iter = cloned_tokens.iter();
-    let token: &Token = unsafe { iter.next().unwrap_unchecked() };
+    let token: &Token = &unsafe { tokens.get(0).unwrap_unchecked() };
     let first_token: &Token = token;
 
     if token.token_type != TokenType::Lbrace {
@@ -182,13 +209,12 @@ pub fn parse_func_body(tokens: &mut VecDeque<Token>) -> Result<SequenceNode, Par
     Ok(SequenceNode::new(first_token.line, first_token.column, unsafe { result.unwrap_unchecked() }))
 }
 
-pub fn parse_expression(tokens: &mut VecDeque<Token>) -> Result<Rc<dyn AstNode>, ParserError> {
+pub fn parse_expression(tokens: &mut Vector<Token>) -> Result<Rc<dyn AstNode>, ParserError> {
     if tokens.len() == 0 {
         return Err(ParserError::new(0, 0, "Expected expression, but found end of file", ParserErrorCode::EmptyTokenList));
     }
 
-    let cloned_tokens = tokens.clone();
-    let token: &Token = unsafe { cloned_tokens.iter().next().unwrap_unchecked() };
+    let token: &Token = &unsafe { tokens.get(0).unwrap_unchecked() };
 
     if token.token_type == TokenType::String {
         tokens.pop_front();
@@ -203,12 +229,8 @@ pub fn parse_expression(tokens: &mut VecDeque<Token>) -> Result<Rc<dyn AstNode>,
     }
 
     if token.token_type == TokenType::Identifier {
-        let mut iter = tokens.iter();
-
-        if iter.len() >= 2 {
-            iter.next();
-
-            if unsafe { iter.next().unwrap_unchecked() }.token_type == TokenType::Lparen {
+        if tokens.len() >= 2 {
+            if unsafe { tokens.get(1).unwrap_unchecked() }.token_type == TokenType::Lparen {
                 let result: Result<CallFuncNode, ParserError> = parse_func_call(tokens);
 
                 if result.is_ok() {
@@ -240,7 +262,7 @@ pub fn parse_expression(tokens: &mut VecDeque<Token>) -> Result<Rc<dyn AstNode>,
     return Err(ParserError::new(token.line, token.column, "Unexpected token type, expected expression", ParserErrorCode::UnexpectedType));
 }
 
-pub fn parse_program(tokens: &mut VecDeque<Token>) -> Result<SequenceNode, ParserError> {
+pub fn parse_program(tokens: &mut Vector<Token>) -> Result<SequenceNode, ParserError> {
     let result = parse_expression_list(tokens, TokenType::Unknown);
 
     if result.is_err() {
@@ -258,6 +280,6 @@ pub fn parse(code: &str) -> Result<SequenceNode, ParserError> {
         return Err(ParserError { line: error.line, column: error.column, description: error.description, code: ParserErrorCode::Lexer });
     }
 
-    let mut tokens: VecDeque<Token> = VecDeque::from(tokens_result.unwrap());
-    parse_program(&mut tokens)
+    let tokens: VecDeque<Token> = VecDeque::from(tokens_result.unwrap());
+    parse_program(&mut Vector::new(tokens))
 }

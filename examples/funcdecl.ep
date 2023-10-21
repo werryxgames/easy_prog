@@ -1,13 +1,13 @@
-declfunc("v", "print_Hello_World", "v", {
+declfunc("print_Hello_World", {
     print("Hello, World")
 }),
 
-declfunc("i", "print_loop", "i", "total_times", {
+declfunc("print_loop", "total_times", {
     forrng(total_times, {
         print_Hello_World()
     }),
     return(total_times)
 }),
 
-declvar("i", result, print_loop(4)),
+set("result", print_loop(4)),
 print(result)

@@ -108,7 +108,7 @@ impl Variant for Str {
     }
 
     fn as_str(&self) -> Str {
-        (*self).clone()
+        self.to_owned()
     }
 
     fn as_func(&self) -> Function {
@@ -272,14 +272,7 @@ impl PartialEq for Function {
             return true;
         }
 
-        let body1 = unsafe { self.body.clone().unwrap_unchecked() }.body;
-        let body2 = unsafe { other.body.clone().unwrap_unchecked() }.body;
-
-        if body1.len() != body2.len() {
-            return false;
-        }
-
-        body1 == body2
+        unsafe { self.body.as_ref().unwrap_unchecked() }.body == unsafe { other.body.as_ref().unwrap_unchecked() }.body
     }
 }
 
@@ -297,7 +290,7 @@ impl Variant for Function {
     }
 
     fn as_func(&self) -> Function {
-        (*self).clone()
+        self.to_owned()
     }
 
     fn as_custom(&self) -> Custom {
@@ -368,7 +361,7 @@ impl AstNode for SequenceNode {
     }
 
     fn as_sequence(&self) -> SequenceNode {
-        (*self).clone()
+        self.to_owned()
     }
 
     fn as_call_func(&self) -> CallFuncNode {
@@ -428,7 +421,7 @@ impl AstNode for CallFuncNode {
     }
 
     fn as_call_func(&self) -> CallFuncNode {
-        (*self).clone()
+        self.to_owned()
     }
 
     fn as_str_const(&self) -> ConstStrNode {
@@ -495,7 +488,7 @@ impl AstNode for ConstIntNode {
     }
 
     fn as_int_const(&self) -> ConstIntNode {
-        (*self).clone()
+        self.to_owned()
     }
 
     fn as_variable(&self) -> VariableNode {
@@ -543,7 +536,7 @@ impl AstNode for ConstStrNode {
     }
 
     fn as_str_const(&self) -> ConstStrNode {
-        (*self).clone()
+        self.to_owned()
     }
 
     fn as_int_const(&self) -> ConstIntNode {
@@ -603,7 +596,7 @@ impl AstNode for VariableNode {
     }
 
     fn as_variable(&self) -> VariableNode {
-        (*self).clone()
+        self.to_owned()
     }
 
     fn print(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
