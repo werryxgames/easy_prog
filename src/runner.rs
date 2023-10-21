@@ -128,7 +128,7 @@ pub fn run_code_scope(code: &str, scope: &mut Scope) -> bool {
 
     if parse_result.is_err() {
         let error = unsafe { parse_result.unwrap_err_unchecked() };
-        println!("Code: Error on line {} column {}: {}", error.line, error.column, error.description);
+        println!("Error on line {} column {}: {}", error.line, error.column, error.description);
         return false;
     }
 
@@ -162,5 +162,26 @@ pub fn run_file_scope(path: &str, scope: &mut Scope) -> bool {
 pub fn run_file(path: &str) -> bool {
     let mut scope: Scope = Scope::with_stdlib();
     run_file_scope(path, &mut scope)
+}
+
+pub fn run_line_scope(code: &str, scope: &mut Scope) -> Result<Result<Rc<dyn Variant>, NativeException>, RunnerError> {
+    let parse_result = parse(&code);
+
+    if parse_result.is_err() {
+        let error = unsafe { parse_result.unwrap_err_unchecked() };
+        return Err(RunnerError::new(error.line, error.column, &format!("Parser: {}", error.description)));
+    }
+
+    let ast: SequenceNode = unsafe { parse_result.unwrap_unchecked() };
+
+    if ast.body.len() == 1 {
+        return execute_func(scope, unsafe { ast.body.first().unwrap_unchecked() }.as_call_func())
+    }
+
+    Ok(Ok(Rc::new(Void::new())))
+}
+
+pub fn run_line(code: &str) -> Result<Result<Rc<dyn Variant>, NativeException>, RunnerError> {
+    run_line_scope(code, &mut Scope::with_stdlib())
 }
 

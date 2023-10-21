@@ -1,0 +1,5 @@
+set("file", fopen("hi", "w")),
+fwrite(file, "Hello, World!"),
+print("File content: '", fread(file), "'", lf()),
+fclose(file)
+

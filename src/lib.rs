@@ -1,3 +1,4 @@
+pub mod repl;
 pub mod runner;
 pub mod parser;
 pub mod stdlib;

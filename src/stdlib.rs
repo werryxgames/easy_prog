@@ -1,4 +1,4 @@
-use std::{io::{self, Read, Write}, fs, process};
+use std::{io::{self, Read, Write}, fs::{self, File}, process, mem::ManuallyDrop};
 use std::rc::Rc;
 
 use crate::{types::{Type, Scope, Function, Int, Str, NativeException, Custom, Variant, Void, SequenceNode}, runner::execute_sequence};
@@ -112,7 +112,9 @@ native_function!(fopen, line, column, _scope, args, {
         return Err(NativeException::new(line, column, "I/O error"));
     }
 
-    Ok(Rc::new(Custom::new(0, &mut file.unwrap() as *mut fs::File as *mut () )))
+    let md_file = &mut ManuallyDrop::new(unsafe { file.unwrap_unchecked() });
+
+    Ok(Rc::new(Custom::new(0, md_file as *mut ManuallyDrop<fs::File> as *mut () )))
 });
 
 native_function!(fread, line, column, _scope, args, {
@@ -159,12 +161,32 @@ native_function!(fwrite, line, column, _scope, args, {
         return Err(NativeException::new(line, column, "First argument should be `File(path)`"));
     }
 
-    let file_result = ep_unpack!(custom.ptr, fs::File, try_clone).unwrap().write_all(args[1].as_str().text.as_bytes());
+    let file_result = unsafe { (custom.ptr as *mut ManuallyDrop<fs::File>).read() }.write_all(args[1].as_str().text.as_bytes());
 
     if file_result.is_err() {
         return Err(NativeException::new(line, column, "I/O error"));
     }
 
+    Ok(Rc::new(Void::new()))
+});
+
+native_function!(fclose, line, column, _scope, args, {
+    if args.len() != 1 {
+        return Err(NativeException::new(line, column, &format!("This function takes 1 argument, {} given", args.len())));
+    }
+
+    if args[0].get_type() != Type::Custom {
+        return Err(NativeException::new(line, column, "First argument of this function should be `File(path)`"));
+    }
+
+    let custom: Custom = args[0].as_custom();
+
+    if custom.id != 0 {
+        return Err(NativeException::new(line, column, "First argument should be `File(path)`"));
+    }
+
+    let mut file: ManuallyDrop<File> = unsafe { (custom.ptr as *mut ManuallyDrop<File>).read() };
+    unsafe { ManuallyDrop::<File>::drop(&mut file) };
     Ok(Rc::new(Void::new()))
 });
 
@@ -555,6 +577,11 @@ pub fn add_fwrite(scope: &mut Scope) {
     scope.functions.insert("fwrite".to_string(), func);
 }
 
+pub fn add_fclose(scope: &mut Scope) {
+    let func = Function::new_native(fclose);
+    scope.functions.insert("fclose".to_string(), func);
+}
+
 pub fn add_parse_int(scope: &mut Scope) {
     let func = Function::new_native(parse_int);
     scope.functions.insert("parse_int".to_string(), func);
@@ -656,6 +683,7 @@ pub fn add_file_io(scope: &mut Scope) {
     add_fopen(scope);
     add_fread(scope);
     add_fwrite(scope);
+    add_fclose(scope);
 }
 
 pub fn add_io(scope: &mut Scope) {
