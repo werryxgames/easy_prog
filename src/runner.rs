@@ -15,12 +15,12 @@ impl RunnerError {
     }
 }
 
-pub fn get_variable(scope: &mut Scope, node: VariableNode) -> Result<Rc<dyn Variant>, RunnerError> {
+pub fn get_variable(scope: &mut Scope, node: VariableNode) -> Result<&mut Rc<dyn Variant>, RunnerError> {
     if !scope.variables.contains_key(&node.name) {
         return Err(RunnerError::new(node.line, node.column, &format!("No variable '{}' in the current scope", node.name)));
     }
 
-    Ok(unsafe { (*scope.variables.get(&node.name).unwrap_unchecked()).clone() })
+    Ok(unsafe { scope.variables.get_mut(&node.name).unwrap_unchecked() })
 }
 
 pub fn execute_func(scope: &mut Scope, node: CallFuncNode) -> Result<Result<Rc<dyn Variant>, NativeException>, RunnerError> {
@@ -64,7 +64,7 @@ pub fn execute_func(scope: &mut Scope, node: CallFuncNode) -> Result<Result<Rc<d
                     return Err(unsafe { result.unwrap_err_unchecked() });
                 }
 
-                value_args.push(unsafe { result.unwrap_unchecked() });
+                value_args.push(unsafe { result.unwrap_unchecked() }.clone());
             }
         }
     }

@@ -508,11 +508,11 @@ native_function!(inspect_scope, line, column, scope, args, {
 
     println!("Begin of inspection");
 
-    for variable in scope.variables.clone() {
+    for variable in scope.variables.iter() {
         println!("Variable {} = {:?}", variable.0, variable.1);
     }
 
-    for function in scope.functions.clone() {
+    for function in scope.functions.iter() {
         println!("Function {} = {:?}", function.0, function.1);
     }
 
