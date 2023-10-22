@@ -1,5 +1,6 @@
 use crate::types::{Token, TokenType};
 
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct LexerError {
     pub line: u32,
     pub column: u32,
