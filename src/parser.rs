@@ -1,9 +1,9 @@
 #[cfg(feature = "lexer")]
 use crate::lexer::to_tokens;
-use crate::types::{Token, TokenType};
 use crate::types::{
     AstNode, CallFuncNode, ConstIntNode, ConstStrNode, Int, SequenceNode, Str, VariableNode,
 };
+use crate::types::{Token, TokenType};
 use std::collections::VecDeque;
 use std::rc::Rc;
 

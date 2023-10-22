@@ -7,10 +7,11 @@ use std::cmp;
 
 use crate::{
     runner::run_line_scope,
-    types::{Scope, Type, Str},
+    types::{Scope, Str, Type},
 };
 use std::{
-    io::{self, Write, BufRead, Stdin}, rc::Rc,
+    io::{self, BufRead, Stdin, Write},
+    rc::Rc,
 };
 
 static VERSION: &str = "1.0.0";
@@ -304,7 +305,9 @@ pub fn start_repl_ex<T: Write>(scope: &mut Scope, out: &mut T) -> ReplError {
     }
 
     let mut editor = unsafe { editor_result.unwrap_unchecked() };
-    scope.variables.insert("__prompt".to_string(), Rc::new(Str::new(DEFAULT_PROMPT)));
+    scope
+        .variables
+        .insert("__prompt".to_string(), Rc::new(Str::new(DEFAULT_PROMPT)));
     editor.set_helper(Some(VarFuncHelper::new(scope)));
 
     if writeln!(out, "Easy Prog interpreter v.{} by Werryx Games", VERSION).is_err() {
@@ -393,7 +396,9 @@ pub fn start_repl_scope(scope: &mut Scope) -> ReplError {
 }
 
 pub fn start_default_repl<W: Write>(scope: &mut Scope, out: &mut W, in_: Stdin) -> ReplError {
-    scope.variables.insert("__prompt".to_string(), Rc::new(Str::new(DEFAULT_PROMPT)));
+    scope
+        .variables
+        .insert("__prompt".to_string(), Rc::new(Str::new(DEFAULT_PROMPT)));
 
     if writeln!(out, "Easy Prog interpreter v.{} by Werryx Games", VERSION).is_err() {
         return ReplError::new("Stdout write error");

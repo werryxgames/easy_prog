@@ -4,8 +4,8 @@ use crate::parser::parse;
 use std::{fs, io::Error, rc::Rc, sync::Mutex};
 
 use crate::types::{
-    CallFuncNode, Function, NativeException, NodeType, Scope, SequenceNode, VariableNode,
-    Variant, Void,
+    CallFuncNode, Function, NativeException, NodeType, Scope, SequenceNode, VariableNode, Variant,
+    Void,
 };
 
 #[derive(Debug)]
