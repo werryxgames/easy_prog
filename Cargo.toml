@@ -4,5 +4,15 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-libc = "0.2.149"
-rustyline = "12.0.0"
+libc = { version = "0.2.149", optional = true }
+rustyline = { version = "12.0.0", optional = true }
+
+[features]
+default = ["lexer", "parser", "runner", "stdlib", "repl", "repl-rustyline"]
+lexer = []
+parser = []
+runner = []
+stdlib = ["dep:libc", "runner"]
+repl = ["lexer", "parser", "runner", "stdlib"]
+repl-rustyline = ["repl", "dep:rustyline"]
+

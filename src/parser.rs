@@ -1,4 +1,6 @@
-use crate::lexer::{to_tokens, Token, TokenType};
+#[cfg(feature = "lexer")]
+use crate::lexer::to_tokens;
+use crate::types::{Token, TokenType};
 use crate::types::{
     AstNode, CallFuncNode, ConstIntNode, ConstStrNode, Int, SequenceNode, Str, VariableNode,
 };
@@ -392,6 +394,7 @@ pub fn parse_program(tokens: &mut Vector<Token>) -> Result<SequenceNode, ParserE
     }))
 }
 
+#[cfg(feature = "lexer")]
 pub fn parse(code: &str) -> Result<SequenceNode, ParserError> {
     let tokens_result = to_tokens(code);
 

@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::fmt::{Debug, Formatter};
 use std::rc::Rc;
 
+#[cfg(feature = "stdlib")]
 use crate::stdlib::add_stdlib;
 
 #[repr(u8)]
@@ -710,10 +711,16 @@ impl Scope {
         Scope::new(HashMap::new(), HashMap::new(), None)
     }
 
+    #[cfg(feature = "stdlib")]
     pub fn with_stdlib() -> Scope {
         let mut scope = Scope::empty();
         add_stdlib(&mut scope);
         scope
+    }
+
+    #[cfg(not(feature = "stdlib"))]
+    pub fn with_stdlib() -> Scope {
+        Scope::empty()
     }
 
     pub fn from_scope(scope: &Scope) -> Scope {
@@ -779,6 +786,42 @@ impl Drop for Scope {
     fn drop(&mut self) {
         for destructor in self.destructors.clone() {
             destructor(self);
+        }
+    }
+}
+
+#[repr(u8)]
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum TokenType {
+    Unknown,
+    Identifier,
+    String,
+    Number,
+    Lparen,
+    Rparen,
+    Lbrace,
+    Rbrace,
+    Comma,
+    _CommentUnknown,
+    _CommentLine,
+    _CommentBlock,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct Token {
+    pub token_type: TokenType,
+    pub content: String,
+    pub line: u32,
+    pub column: u32,
+}
+
+impl Token {
+    pub fn new(token_type: TokenType, line: u32, column: u32, content: &str) -> Token {
+        Token {
+            token_type,
+            content: content.to_string(),
+            line,
+            column,
         }
     }
 }

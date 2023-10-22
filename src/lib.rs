@@ -1,6 +1,11 @@
+#[cfg(feature = "lexer")]
 pub mod lexer;
+#[cfg(feature = "parser")]
 pub mod parser;
+#[cfg(feature = "repl")]
 pub mod repl;
+#[cfg(feature = "runner")]
 pub mod runner;
+#[cfg(feature = "stdlib")]
 pub mod stdlib;
 pub mod types;

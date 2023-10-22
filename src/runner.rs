@@ -1,11 +1,11 @@
+#[cfg(feature = "parser")]
+use crate::parser::parse;
+
 use std::{fs, io::Error, rc::Rc, sync::Mutex};
 
-use crate::{
-    parser::parse,
-    types::{
-        CallFuncNode, Function, NativeException, NodeType, Scope, SequenceNode, VariableNode,
-        Variant, Void,
-    },
+use crate::types::{
+    CallFuncNode, Function, NativeException, NodeType, Scope, SequenceNode, VariableNode,
+    Variant, Void,
 };
 
 #[derive(Debug)]
@@ -197,6 +197,7 @@ pub fn execute(scope: &mut Scope, ast: &SequenceNode, path: &str) -> bool {
     true
 }
 
+#[cfg(feature = "parser")]
 pub fn run_code_scope(code: &str, scope: &mut Scope) -> bool {
     let parse_result = parse(code);
 
@@ -212,10 +213,12 @@ pub fn run_code_scope(code: &str, scope: &mut Scope) -> bool {
     execute(scope, &unsafe { parse_result.unwrap_unchecked() }, "Code")
 }
 
+#[cfg(feature = "parser")]
 pub fn run_code(code: &str) -> bool {
     run_code_scope(code, &mut Scope::with_stdlib())
 }
 
+#[cfg(feature = "parser")]
 pub fn run_file_scope(path: &str, scope: &mut Scope) -> bool {
     let code: Result<String, Error> = fs::read_to_string(path);
 
@@ -241,11 +244,13 @@ pub fn run_file_scope(path: &str, scope: &mut Scope) -> bool {
     execute(scope, &ast, path)
 }
 
+#[cfg(feature = "parser")]
 pub fn run_file(path: &str) -> bool {
     let mut scope: Scope = Scope::with_stdlib();
     run_file_scope(path, &mut scope)
 }
 
+#[cfg(feature = "parser")]
 pub fn run_line_scope(
     code: &str,
     scope: &mut Scope,
@@ -273,6 +278,7 @@ pub fn run_line_scope(
     Ok(Ok(Rc::new(Void::new())))
 }
 
+#[cfg(feature = "parser")]
 pub fn run_line(code: &str) -> Result<Result<Rc<dyn Variant>, NativeException>, RunnerError> {
     run_line_scope(code, &mut Scope::with_stdlib())
 }
