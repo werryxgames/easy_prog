@@ -527,7 +527,10 @@ native_function!(null, line, column, scope, args, {
     } else if var_type == Type::Str {
         scope.set_variable(&var_name, Rc::new(Str::new("")));
     } else if var_type == Type::Func {
-        scope.set_variable(&var_name, Rc::new(Function::new(SequenceNode::new(line, column, Vec::new()))));
+        scope.set_variable(
+            &var_name,
+            Rc::new(Function::new(SequenceNode::new(line, column, Vec::new()))),
+        );
     } else if var_type == Type::Custom {
         return Err(NativeException::new(
             line,

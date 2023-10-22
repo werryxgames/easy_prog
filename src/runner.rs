@@ -27,10 +27,7 @@ impl RunnerError {
 
 static DESTRUCTORS: Mutex<Vec<fn(&mut Scope)>> = Mutex::new(Vec::new());
 
-pub fn get_variable(
-    scope: &Scope,
-    node: VariableNode,
-) -> Result<&Rc<dyn Variant>, RunnerError> {
+pub fn get_variable(scope: &Scope, node: VariableNode) -> Result<&Rc<dyn Variant>, RunnerError> {
     let result = scope.get_variable(&node.name);
 
     if result.is_none() {
