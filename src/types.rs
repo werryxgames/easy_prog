@@ -687,10 +687,10 @@ impl NativeException {
 
 #[derive(Debug, Clone)]
 pub struct Scope {
-    pub variables: HashMap<String, Rc<dyn Variant>>,
-    pub functions: HashMap<String, Function>,
-    pub parent_scope: Option<*const Scope>,
-    pub destructors: Vec<fn(&mut Scope)>,
+    variables: HashMap<String, Rc<dyn Variant>>,
+    functions: HashMap<String, Function>,
+    parent_scope: Option<*const Scope>,
+    destructors: Vec<fn(&mut Scope)>,
 }
 
 impl Scope {
@@ -749,6 +749,16 @@ impl Scope {
         None
     }
 
+    pub fn get_variables(&self) -> HashMap<String, Rc<dyn Variant>> {
+        let mut variables = self.variables.clone();
+
+        if self.parent_scope.is_some() {
+            variables.extend(unsafe { (*self.parent_scope.unwrap_unchecked()).get_variables() })
+        }
+
+        variables
+    }
+
     pub fn set_variable(&mut self, name: &str, value: Rc<dyn Variant>) -> Option<Rc<dyn Variant>> {
         self.variables.insert(name.to_string(), value)
     }
@@ -771,6 +781,16 @@ impl Scope {
         }
 
         None
+    }
+
+    pub fn get_functions(&self) -> HashMap<String, Function> {
+        let mut functions = self.functions.clone();
+
+        if self.parent_scope.is_some() {
+            functions.extend(unsafe { (*self.parent_scope.unwrap_unchecked()).get_functions() })
+        }
+
+        functions
     }
 
     pub fn set_function(&mut self, name: &str, func: Function) -> Option<Function> {

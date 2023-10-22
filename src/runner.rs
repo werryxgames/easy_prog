@@ -28,10 +28,12 @@ impl RunnerError {
 static DESTRUCTORS: Mutex<Vec<fn(&mut Scope)>> = Mutex::new(Vec::new());
 
 pub fn get_variable(
-    scope: &mut Scope,
+    scope: &Scope,
     node: VariableNode,
-) -> Result<&mut Rc<dyn Variant>, RunnerError> {
-    if !scope.variables.contains_key(&node.name) {
+) -> Result<&Rc<dyn Variant>, RunnerError> {
+    let result = scope.get_variable(&node.name);
+
+    if result.is_none() {
         return Err(RunnerError::new(
             node.line,
             node.column,
@@ -39,14 +41,14 @@ pub fn get_variable(
         ));
     }
 
-    Ok(unsafe { scope.variables.get_mut(&node.name).unwrap_unchecked() })
+    Ok(unsafe { result.unwrap_unchecked() })
 }
 
 pub fn execute_func(
     scope: &mut Scope,
     node: CallFuncNode,
 ) -> Result<Result<Rc<dyn Variant>, NativeException>, RunnerError> {
-    if !scope.functions.contains_key(&node.name) {
+    if !scope.has_function(&node.name) {
         return Err(RunnerError::new(
             node.line,
             node.column,
@@ -55,7 +57,7 @@ pub fn execute_func(
     }
 
     let func: &mut Function = unsafe {
-        (scope.functions.get(&node.name).unwrap_unchecked() as *const Function as *mut Function)
+        (scope.get_function(&node.name).unwrap_unchecked() as *const Function as *mut Function)
             .as_mut()
             .unwrap_unchecked()
     };
@@ -88,7 +90,7 @@ pub fn execute_func(
                 value_args.push(Rc::new(arg.as_str_const().value));
             }
             NodeType::Identifier => {
-                let result = get_variable(&mut *scope, arg.as_variable());
+                let result = get_variable(scope, arg.as_variable());
 
                 if result.is_err() {
                     return Err(unsafe { result.unwrap_err_unchecked() });

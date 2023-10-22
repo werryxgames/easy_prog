@@ -102,13 +102,13 @@ impl VarFuncHelper {
 
         let word = &line_part[i..];
 
-        for var in self.scope.variables.iter() {
+        for var in self.scope.get_variables() {
             if var.0.starts_with(word) && var.0 != word {
                 variants.push(VarFuncCandidate::new(var.0.to_string()));
             }
         }
 
-        for func in self.scope.functions.iter() {
+        for func in self.scope.get_functions() {
             if func.0.starts_with(word) && func.0 != word {
                 variants.push(VarFuncCandidate::new(func.0.to_string()));
             }
@@ -193,7 +193,7 @@ impl rustyline::highlight::Highlighter for VarFuncHelper {
         candidate: &'c str,
         _completion: rustyline::CompletionType,
     ) -> std::borrow::Cow<'c, str> {
-        for variable in self.scope.variables.iter() {
+        for variable in self.scope.get_variables() {
             if variable.0 == candidate {
                 if candidate.starts_with("__") {
                     return std::borrow::Cow::Owned(
@@ -207,7 +207,7 @@ impl rustyline::highlight::Highlighter for VarFuncHelper {
             }
         }
 
-        for func in self.scope.functions.iter() {
+        for func in self.scope.get_functions() {
             if func.0 == candidate {
                 if func.1.native.is_some() {
                     return std::borrow::Cow::Owned(
@@ -305,9 +305,7 @@ pub fn start_repl_ex<T: Write>(scope: &mut Scope, out: &mut T) -> ReplError {
     }
 
     let mut editor = unsafe { editor_result.unwrap_unchecked() };
-    scope
-        .variables
-        .insert("__prompt".to_string(), Rc::new(Str::new(DEFAULT_PROMPT)));
+    scope.set_variable("__prompt", Rc::new(Str::new(DEFAULT_PROMPT)));
     editor.set_helper(Some(VarFuncHelper::new(scope)));
 
     if writeln!(out, "Easy Prog interpreter v.{} by Werryx Games", VERSION).is_err() {
@@ -315,7 +313,7 @@ pub fn start_repl_ex<T: Write>(scope: &mut Scope, out: &mut T) -> ReplError {
     }
 
     loop {
-        let prompt_result = scope.variables.get("__prompt");
+        let prompt_result = scope.get_variable("__prompt");
         let prompt: String;
 
         if prompt_result.is_none() {
@@ -396,16 +394,14 @@ pub fn start_repl_scope(scope: &mut Scope) -> ReplError {
 }
 
 pub fn start_default_repl<W: Write>(scope: &mut Scope, out: &mut W, in_: Stdin) -> ReplError {
-    scope
-        .variables
-        .insert("__prompt".to_string(), Rc::new(Str::new(DEFAULT_PROMPT)));
+    scope.set_variable("__prompt", Rc::new(Str::new(DEFAULT_PROMPT)));
 
     if writeln!(out, "Easy Prog interpreter v.{} by Werryx Games", VERSION).is_err() {
         return ReplError::new("Stdout write error");
     }
 
     loop {
-        let prompt_result = scope.variables.get("__prompt");
+        let prompt_result = scope.get_variable("__prompt");
         let prompt: String;
 
         if prompt_result.is_none() {

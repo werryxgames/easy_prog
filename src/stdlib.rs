@@ -466,9 +466,7 @@ native_function!(declfunc, line, column, scope, args, {
         ));
     }
 
-    scope
-        .functions
-        .insert(args[0].as_str().text, args[1].as_func());
+    scope.set_function(&args[0].as_str().text, args[1].as_func());
     Ok(Rc::new(Void::new()))
 });
 
@@ -489,9 +487,7 @@ native_function!(set, line, column, scope, args, {
         ));
     }
 
-    scope
-        .variables
-        .insert(args[0].as_str().text, args[1].clone());
+    scope.set_variable(&args[0].as_str().text, args[1].clone());
     Ok(Rc::new(Void::new()))
 });
 
@@ -513,7 +509,7 @@ native_function!(null, line, column, scope, args, {
     }
 
     let var_name = args[0].as_str().text;
-    let var_result = scope.variables.get(&var_name);
+    let var_result = scope.get_variable(&var_name);
 
     if var_result.is_none() {
         return Err(NativeException::new(
@@ -527,14 +523,11 @@ native_function!(null, line, column, scope, args, {
     let var_type = var.get_type();
 
     if var_type == Type::Int {
-        scope.variables.insert(var_name, Rc::new(Int::new(0)));
+        scope.set_variable(&var_name, Rc::new(Int::new(0)));
     } else if var_type == Type::Str {
-        scope.variables.insert(var_name, Rc::new(Str::new("")));
+        scope.set_variable(&var_name, Rc::new(Str::new("")));
     } else if var_type == Type::Func {
-        scope.variables.insert(
-            var_name,
-            Rc::new(Function::new(SequenceNode::new(line, column, Vec::new()))),
-        );
+        scope.set_variable(&var_name, Rc::new(Function::new(SequenceNode::new(line, column, Vec::new()))));
     } else if var_type == Type::Custom {
         return Err(NativeException::new(
             line,
@@ -973,11 +966,11 @@ native_function!(inspect_scope, line, column, scope, args, {
 
     println!("Begin of inspection");
 
-    for variable in scope.variables.iter() {
+    for variable in scope.get_variables() {
         println!("Variable {} = {:?}", variable.0, variable.1);
     }
 
-    for function in scope.functions.iter() {
+    for function in scope.get_functions() {
         println!("Function {} = {:?}", function.0, function.1);
     }
 
@@ -987,26 +980,26 @@ native_function!(inspect_scope, line, column, scope, args, {
 
 pub fn add_print(scope: &mut Scope) {
     let func = Function::new_native(print);
-    scope.functions.insert("print".to_string(), func);
+    scope.set_function("print", func);
 }
 
 pub fn add_flush_stdout(scope: &mut Scope) {
     let func = Function::new_native(print);
-    scope.functions.insert("flush_stdout".to_string(), func);
+    scope.set_function("flush_stdout", func);
 }
 
 pub fn add_printerr(scope: &mut Scope) {
     let func = Function::new_native(printerr);
-    scope.functions.insert("printerr".to_string(), func);
+    scope.set_function("printerr", func);
 }
 
 pub fn add_input(scope: &mut Scope) {
     let func = Function::new_native(input);
-    scope.functions.insert("input".to_string(), func);
+    scope.set_function("input", func);
 }
 
 pub fn destructor_close_files(scope: &mut Scope) {
-    for variable in scope.variables.iter() {
+    for variable in scope.get_variables() {
         let var = variable.1;
 
         if var.get_type() == Type::Custom {
@@ -1029,113 +1022,113 @@ pub fn destructor_close_files(scope: &mut Scope) {
 
 pub fn add_fopen(scope: &mut Scope) {
     let func = Function::new_native(fopen);
-    scope.functions.insert("fopen".to_string(), func);
+    scope.set_function("fopen", func);
     add_cleanup_destructor(destructor_close_files);
 }
 
 pub fn add_fread(scope: &mut Scope) {
     let func = Function::new_native(fread);
-    scope.functions.insert("fread".to_string(), func);
+    scope.set_function("fread", func);
 }
 
 pub fn add_fwrite(scope: &mut Scope) {
     let func = Function::new_native(fwrite);
-    scope.functions.insert("fwrite".to_string(), func);
+    scope.set_function("fwrite", func);
 }
 
 pub fn add_fclose(scope: &mut Scope) {
     let func = Function::new_native(fclose);
-    scope.functions.insert("fclose".to_string(), func);
+    scope.set_function("fclose", func);
 }
 
 pub fn add_parse_int(scope: &mut Scope) {
     let func = Function::new_native(parse_int);
-    scope.functions.insert("parse_int".to_string(), func);
+    scope.set_function("parse_int", func);
 }
 
 pub fn add_lf(scope: &mut Scope) {
     let func = Function::new_native(lf);
-    scope.functions.insert("lf".to_string(), func);
+    scope.set_function("lf", func);
 }
 
 pub fn add_cr(scope: &mut Scope) {
     let func = Function::new_native(cr);
-    scope.functions.insert("cr".to_string(), func);
+    scope.set_function("cr", func);
 }
 
 pub fn add_declfunc(scope: &mut Scope) {
     let func = Function::new_native(declfunc);
-    scope.functions.insert("declfunc".to_string(), func);
+    scope.set_function("declfunc", func);
 }
 
 pub fn add_set(scope: &mut Scope) {
     let func = Function::new_native(set);
-    scope.functions.insert("set".to_string(), func);
+    scope.set_function("set", func);
 }
 
 pub fn add_null(scope: &mut Scope) {
     let func = Function::new_native(null);
-    scope.functions.insert("null".to_string(), func);
+    scope.set_function("null", func);
 }
 
 pub fn add_if(scope: &mut Scope) {
     let func = Function::new_native(if_);
-    scope.functions.insert("if".to_string(), func);
+    scope.set_function("if", func);
 }
 
 pub fn add_if_else(scope: &mut Scope) {
     let func = Function::new_native(if_else);
-    scope.functions.insert("if_else".to_string(), func);
+    scope.set_function("if_else", func);
 }
 
 pub fn add_add(scope: &mut Scope) {
     let func = Function::new_native(add);
-    scope.functions.insert("add".to_string(), func);
+    scope.set_function("add", func);
 }
 
 pub fn add_subt(scope: &mut Scope) {
     let func = Function::new_native(subt);
-    scope.functions.insert("subt".to_string(), func);
+    scope.set_function("subt", func);
 }
 
 pub fn add_mult(scope: &mut Scope) {
     let func = Function::new_native(mult);
-    scope.functions.insert("mult".to_string(), func);
+    scope.set_function("mult", func);
 }
 
 pub fn add_idiv(scope: &mut Scope) {
     let func = Function::new_native(idiv);
-    scope.functions.insert("idiv".to_string(), func);
+    scope.set_function("idiv", func);
 }
 
 pub fn add_and(scope: &mut Scope) {
     let func = Function::new_native(and);
-    scope.functions.insert("and".to_string(), func);
+    scope.set_function("and", func);
 }
 
 pub fn add_or(scope: &mut Scope) {
     let func = Function::new_native(or);
-    scope.functions.insert("or".to_string(), func);
+    scope.set_function("or", func);
 }
 
 pub fn add_eq(scope: &mut Scope) {
     let func = Function::new_native(eq);
-    scope.functions.insert("eq".to_string(), func);
+    scope.set_function("eq", func);
 }
 
 pub fn add_neq(scope: &mut Scope) {
     let func = Function::new_native(neq);
-    scope.functions.insert("neq".to_string(), func);
+    scope.set_function("neq", func);
 }
 
 pub fn add_exit(scope: &mut Scope) {
     let func = Function::new_native(exit);
-    scope.functions.insert("exit".to_string(), func);
+    scope.set_function("exit", func);
 }
 
 pub fn add_inspect_scope(scope: &mut Scope) {
     let func = Function::new_native(inspect_scope);
-    scope.functions.insert("inspect_scope".to_string(), func);
+    scope.set_function("inspect_scope", func);
 }
 
 pub fn add_stdio(scope: &mut Scope) {
@@ -1164,12 +1157,8 @@ pub fn add_string(scope: &mut Scope) {
 }
 
 pub fn add_vars(scope: &mut Scope) {
-    scope
-        .variables
-        .insert("true".to_string(), Rc::new(Int::new(1)));
-    scope
-        .variables
-        .insert("false".to_string(), Rc::new(Int::new(0)));
+    scope.set_variable("true", Rc::new(Int::new(1)));
+    scope.set_variable("false", Rc::new(Int::new(0)));
 }
 
 pub fn add_core(scope: &mut Scope) {
